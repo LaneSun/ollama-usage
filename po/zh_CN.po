@@ -114,8 +114,11 @@ msgstr "周使用量：—"
 msgid "Session: —"
 msgstr "会话使用量：—"
 
-msgid "Resets: —"
-msgstr "重置时间：—"
+msgid "Session resets: —"
+msgstr "会话重置：—"
+
+msgid "Weekly resets: —"
+msgstr "周重置：—"
 
 # extension.js — popup menu (format strings)
 msgid "Weekly: %d%%"
@@ -129,3 +132,9 @@ msgstr "会话 %d 小时 %d 分钟后重置"
 
 msgid "Session resetting…"
 msgstr "会话正在重置…"
+
+msgid "Weekly resets in %dd %dh"
+msgstr "周 %d 天 %d 小时后重置"
+
+msgid "Weekly resetting…"
+msgstr "周正在重置…"

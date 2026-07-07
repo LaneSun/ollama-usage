@@ -198,9 +198,13 @@ class OllamaIndicator extends PanelMenu.Button {
         this._sessionItem.setSensitive(false);
         this.menu.addMenuItem(this._sessionItem);
 
-        this._resetItem = new PopupMenu.PopupMenuItem('');
-        this._resetItem.setSensitive(false);
-        this.menu.addMenuItem(this._resetItem);
+        this._sessionResetItem = new PopupMenu.PopupMenuItem('');
+        this._sessionResetItem.setSensitive(false);
+        this.menu.addMenuItem(this._sessionResetItem);
+
+        this._weeklyResetItem = new PopupMenu.PopupMenuItem('');
+        this._weeklyResetItem.setSensitive(false);
+        this.menu.addMenuItem(this._weeklyResetItem);
 
         this._tickCount = 0;
         this._timeoutId = null;
@@ -249,7 +253,8 @@ class OllamaIndicator extends PanelMenu.Button {
             this._statusItem.label.set_text(_('Fetch failed — check cookie'));
             this._weeklyItem.label.set_text(_('Weekly: —'));
             this._sessionItem.label.set_text(_('Session: —'));
-            this._resetItem.label.set_text(_('Resets: —'));
+            this._sessionResetItem.label.set_text(_('Session resets: —'));
+            this._weeklyResetItem.label.set_text(_('Weekly resets: —'));
             return;
         }
         const weeklyPct = Math.round(data.weekly * 100);
@@ -263,12 +268,25 @@ class OllamaIndicator extends PanelMenu.Button {
             if (remaining > 0) {
                 const h = Math.floor(remaining / 3600);
                 const m = Math.floor((remaining % 3600) / 60);
-                this._resetItem.label.set_text(_('Session resets in %dh %dm').format(h, m));
+                this._sessionResetItem.label.set_text(_('Session resets in %dh %dm').format(h, m));
             } else {
-                this._resetItem.label.set_text(_('Session resetting…'));
+                this._sessionResetItem.label.set_text(_('Session resetting…'));
             }
         } else {
-            this._resetItem.label.set_text(_('Resets: —'));
+            this._sessionResetItem.label.set_text(_('Session resets: —'));
+        }
+
+        if (data.weeklyResetTs) {
+            const remaining = data.weeklyResetTs - Date.now() / 1000;
+            if (remaining > 0) {
+                const d = Math.floor(remaining / 86400);
+                const h = Math.floor((remaining % 86400) / 3600);
+                this._weeklyResetItem.label.set_text(_('Weekly resets in %dd %dh').format(d, h));
+            } else {
+                this._weeklyResetItem.label.set_text(_('Weekly resetting…'));
+            }
+        } else {
+            this._weeklyResetItem.label.set_text(_('Weekly resets: —'));
         }
     }
 
@@ -286,6 +304,7 @@ export default class OllamaCloudExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._retryTimerId = null;
+        this._lastData = null;
         this._createIndicator();
         this._addToPanel();
 
@@ -396,6 +415,7 @@ export default class OllamaCloudExtension extends Extension {
             fiveHour: 0.0,
             timeFraction: 0.0,
             sessionResetTs: null,
+            weeklyResetTs: null,
         };
 
         let m = html.match(/aria-label="Session usage\s+([\d.]+)%\s*used"/);
@@ -418,12 +438,29 @@ export default class OllamaCloudExtension extends Extension {
             }
         }
 
+        const weeklyIdx = html.indexOf('Weekly usage');
+        if (weeklyIdx >= 0) {
+            const afterWeekly = html.substring(weeklyIdx);
+            m = afterWeekly.match(/data-time="([^"]+)"/);
+            if (m) {
+                const dt = new Date(m[1]);
+                data.weeklyResetTs = dt.getTime() / 1000;
+            }
+        }
+
         return data;
     }
 
     _applyData(data, fetchOk) {
         if (!fetchOk) {
-            data = { weekly: 0, fiveHour: 0, timeFraction: 0, sessionResetTs: null };
+            if (this._lastData) {
+                this._indicator?._drawingArea.setUsageData(this._lastData, true);
+                this._indicator?.updateMenu(this._lastData, true);
+                return;
+            }
+            data = { weekly: 0, fiveHour: 0, timeFraction: 0, sessionResetTs: null, weeklyResetTs: null };
+        } else {
+            this._lastData = data;
         }
         if (this._indicator) {
             this._indicator._drawingArea.setUsageData(data, fetchOk);
