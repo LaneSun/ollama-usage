@@ -15,7 +15,7 @@ FILES=(
     "README.md"
     "screenshot.png"
     "schemas"
-    "po"
+    "locale"
 )
 
 echo "Packaging ${EXTENSION_NAME}..."

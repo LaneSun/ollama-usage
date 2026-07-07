@@ -442,6 +442,7 @@ export default class OllamaCloudExtension extends Extension {
             this._indicator = null;
         }
         if (this._httpSession) {
+            this._httpSession.abort();
             this._httpSession = null;
         }
         this._settings = null;
