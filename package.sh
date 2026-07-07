@@ -13,7 +13,6 @@ FILES=(
     "prefs.js"
     "LICENSE"
     "README.md"
-    "screenshot.png"
     "schemas"
     "locale"
 )

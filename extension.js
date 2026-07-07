@@ -178,9 +178,9 @@ class OllamaIndicator extends PanelMenu.Button {
         this.add_child(this._drawingArea);
 
         this._refreshItem = new PopupMenu.PopupMenuItem(_('Refresh Now'));
-        this._refreshItem.connect('activate', () => {
+        this._refreshItem.connectObject('activate', () => {
             this._extension.fetchData();
-        });
+        }, this);
         this.menu.addMenuItem(this._refreshItem);
 
         this._statusItem = new PopupMenu.PopupMenuItem(_('Not fetched yet'));
@@ -203,6 +203,32 @@ class OllamaIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(this._resetItem);
 
         this._tickCount = 0;
+        this._timeoutId = null;
+        this._ensureTimeout();
+
+        this._settings.connectObject(
+            'changed::ring-color', () => this._onAppearanceChanged(),
+            'changed::ring-thickness', () => this._onAppearanceChanged(),
+            'changed::ring-gap', () => this._onAppearanceChanged(),
+            'changed::circle-color', () => this._onAppearanceChanged(),
+            'changed::circle-radius', () => this._onAppearanceChanged(),
+            'changed::hand-color', () => this._onAppearanceChanged(),
+            'changed::hand-length', () => this._onAppearanceChanged(),
+            'changed::hand-thickness', () => this._onAppearanceChanged(),
+            'changed::hand-outline-color', () => this._onAppearanceChanged(),
+            'changed::hand-outline-width', () => this._onAppearanceChanged(),
+            this
+        );
+    }
+
+    _onAppearanceChanged() {
+        this._drawingArea._updateSize();
+        this._drawingArea.queue_repaint();
+    }
+
+    _ensureTimeout() {
+        if (this._timeoutId !== null)
+            GLib.source_remove(this._timeoutId);
         this._timeoutId = GLib.timeout_add_seconds(
             GLib.PRIORITY_DEFAULT,
             1,
@@ -216,21 +242,6 @@ class OllamaIndicator extends PanelMenu.Button {
                 return GLib.SOURCE_CONTINUE;
             }
         );
-
-        this._settingsConnections = [];
-        const appearanceKeys = [
-            'ring-color', 'ring-thickness', 'ring-gap',
-            'circle-color', 'circle-radius',
-            'hand-color', 'hand-length', 'hand-thickness',
-            'hand-outline-color', 'hand-outline-width',
-        ];
-        for (const key of appearanceKeys) {
-            const id = this._settings.connect(`changed::${key}`, () => {
-                this._drawingArea._updateSize();
-                this._drawingArea.queue_repaint();
-            });
-            this._settingsConnections.push(id);
-        }
     }
 
     updateMenu(data, fetchOk) {
@@ -262,14 +273,11 @@ class OllamaIndicator extends PanelMenu.Button {
     }
 
     destroy() {
-        if (this._timeoutId) {
+        if (this._timeoutId !== null) {
             GLib.source_remove(this._timeoutId);
             this._timeoutId = null;
         }
-        for (const id of this._settingsConnections) {
-            this._settings.disconnect(id);
-        }
-        this._settingsConnections = [];
+        this._settings.disconnectObject(this);
         super.destroy();
     }
 });
@@ -277,15 +285,15 @@ class OllamaIndicator extends PanelMenu.Button {
 export default class OllamaCloudExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
+        this._retryTimerId = null;
         this._createIndicator();
         this._addToPanel();
 
-        this._posChangedId = this._settings.connect('changed::panel-position', () => {
-            this._recreateIndicator();
-        });
-        this._indexChangedId = this._settings.connect('changed::panel-index', () => {
-            this._recreateIndicator();
-        });
+        this._settings.connectObject(
+            'changed::panel-position', () => this._recreateIndicator(),
+            'changed::panel-index', () => this._recreateIndicator(),
+            this
+        );
 
         this._httpSession = new Soup.Session();
         this.fetchDataWithRetry(3);
@@ -327,6 +335,8 @@ export default class OllamaCloudExtension extends Extension {
         this._fetchData((ok) => {
             if (!ok && maxRetries > 0) {
                 const delay = Math.pow(2, 3 - maxRetries);
+                if (this._retryTimerId !== null)
+                    GLib.source_remove(this._retryTimerId);
                 this._retryTimerId = GLib.timeout_add_seconds(
                     GLib.PRIORITY_DEFAULT,
                     delay,
@@ -367,14 +377,14 @@ export default class OllamaCloudExtension extends Extension {
                         this._applyData(data, ok);
                         if (retryCallback) retryCallback(ok);
                     } catch (e) {
-                        log(`[ollama-usage] fetch error: ${e}`);
+                        console.debug(`[ollama-usage] fetch error: ${e}`);
                         this._applyData({ weekly: 0, fiveHour: 0, timeFraction: 0 }, false);
                         if (retryCallback) retryCallback(false);
                     }
                 }
             );
         } catch (e) {
-            log(`[ollama-usage] fetch setup error: ${e}`);
+            console.debug(`[ollama-usage] fetch setup error: ${e}`);
             this._applyData({ weekly: 0, fiveHour: 0, timeFraction: 0 }, false);
             if (retryCallback) retryCallback(false);
         }
@@ -422,19 +432,12 @@ export default class OllamaCloudExtension extends Extension {
     }
 
     disable() {
-        if (this._retryTimerId) {
+        if (this._retryTimerId !== null) {
             GLib.source_remove(this._retryTimerId);
             this._retryTimerId = null;
         }
         if (this._settings) {
-            if (this._posChangedId) {
-                this._settings.disconnect(this._posChangedId);
-                this._posChangedId = null;
-            }
-            if (this._indexChangedId) {
-                this._settings.disconnect(this._indexChangedId);
-                this._indexChangedId = null;
-            }
+            this._settings.disconnectObject(this);
         }
         if (this._indicator) {
             this._removeFromPanel();
