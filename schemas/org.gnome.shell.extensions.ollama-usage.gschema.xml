@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.ollama-usage"
+          path="/org/gnome/shell/extensions/ollama-usage/">
+
+    <!-- Outer Ring: Weekly Usage -->
+    <key name="ring-color" type="s">
+      <default>"#ffffffff"</default>
+      <summary>Ring Color</summary>
+    </key>
+    <key name="ring-thickness" type="d">
+      <range min="0.5" max="10.0"/>
+      <default>2.0</default>
+      <summary>Ring Thickness</summary>
+    </key>
+
+    <!-- Gap between ring and circle -->
+    <key name="ring-gap" type="d">
+      <range min="0.0" max="20.0"/>
+      <default>2.0</default>
+      <summary>Ring Gap</summary>
+    </key>
+
+    <!-- Inner Circle: 5h Usage -->
+    <key name="circle-color" type="s">
+      <default>"#ffffffff"</default>
+      <summary>Circle Color</summary>
+    </key>
+    <key name="circle-radius" type="d">
+      <range min="2.0" max="28.0"/>
+      <default>6.0</default>
+      <summary>Circle Radius</summary>
+    </key>
+
+    <!-- Clock Hand: Time to Reset -->
+    <key name="hand-color" type="s">
+      <default>"#0088ffff"</default>
+      <summary>Hand Color</summary>
+    </key>
+    <key name="hand-length" type="d">
+      <range min="1.0" max="24.0"/>
+      <default>4.0</default>
+      <summary>Hand Length</summary>
+    </key>
+    <key name="hand-thickness" type="d">
+      <range min="0.5" max="6.0"/>
+      <default>2.0</default>
+      <summary>Hand Thickness</summary>
+    </key>
+    <key name="hand-outline-color" type="s">
+      <default>"#00000000"</default>
+      <summary>Hand Outline Color</summary>
+    </key>
+    <key name="hand-outline-width" type="d">
+      <range min="0.0" max="5.0"/>
+      <default>1.0</default>
+      <summary>Hand Outline Width</summary>
+    </key>
+
+    <!-- Position -->
+    <key name="panel-position" type="s">
+      <choices>
+        <choice value="left"/>
+        <choice value="center"/>
+        <choice value="right"/>
+      </choices>
+      <default>"left"</default>
+      <summary>Panel Position</summary>
+    </key>
+    <key name="panel-index" type="i">
+      <range min="0" max="100"/>
+      <default>10</default>
+      <summary>Panel Index</summary>
+    </key>
+
+    <!-- Data -->
+    <key name="update-interval" type="i">
+      <range min="5" max="3600"/>
+      <default>60</default>
+      <summary>Update Interval</summary>
+    </key>
+
+    <!-- Ollama Cloud credentials / fetch -->
+    <key name="ollama-cookie" type="s">
+      <default>""</default>
+      <summary>Ollama Cookie</summary>
+    </key>
+
+  </schema>
+</schemalist>

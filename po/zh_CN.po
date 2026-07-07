@@ -1,0 +1,131 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: ollama-usage\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+# metadata.json
+msgid "Ollama Cloud Indicator"
+msgstr "Ollama Cloud 指示器"
+
+msgid "Display Ollama Cloud subscription usage with a circular indicator in the top panel."
+msgstr "在顶栏显示 Ollama Cloud 订阅使用量的圆形指示器。"
+
+# prefs.js — group titles
+msgid "Ollama Cloud"
+msgstr "Ollama Cloud"
+
+msgid "Outer Ring (Session Usage)"
+msgstr "外环（会话使用量）"
+
+msgid "Inner Circle (Weekly Usage)"
+msgstr "内圆（周使用量）"
+
+msgid "Clock Hand (Time to Reset)"
+msgstr "指针（距重置时间）"
+
+msgid "Position"
+msgstr "位置"
+
+msgid "Data"
+msgstr "数据"
+
+# prefs.js — cookie
+msgid "__Secure-session"
+msgstr "__Secure-session"
+
+# prefs.js — ring settings
+msgid "Ring Color"
+msgstr "环形颜色"
+
+msgid "Ring Thickness"
+msgstr "环形粗细"
+
+msgid "Ring Gap"
+msgstr "环形间距"
+
+# prefs.js — circle settings
+msgid "Circle Color"
+msgstr "圆形颜色"
+
+msgid "Circle Radius"
+msgstr "圆形半径"
+
+# prefs.js — hand settings
+msgid "Hand Color"
+msgstr "指针颜色"
+
+msgid "Hand Length"
+msgstr "指针长度"
+
+msgid "Hand Thickness"
+msgstr "指针粗细"
+
+msgid "Hand Outline Color"
+msgstr "指针描边颜色"
+
+msgid "Hand Outline Width"
+msgstr "指针描边宽度"
+
+# prefs.js — position settings
+msgid "Panel Position"
+msgstr "面板位置"
+
+msgid "Left"
+msgstr "左侧"
+
+msgid "Center"
+msgstr "居中"
+
+msgid "Right"
+msgstr "右侧"
+
+msgid "Position Index"
+msgstr "排列序号"
+
+# prefs.js — data settings
+msgid "Update Interval (seconds)"
+msgstr "更新间隔（秒）"
+
+# prefs.js — reset
+msgid "Reset to Defaults"
+msgstr "恢复默认设置"
+
+# extension.js — popup menu
+msgid "Refresh Now"
+msgstr "立即刷新"
+
+msgid "Not fetched yet"
+msgstr "尚未获取"
+
+msgid "Fetch failed — check cookie"
+msgstr "获取失败——请检查 Cookie"
+
+msgid "Last fetch: OK"
+msgstr "上次获取：成功"
+
+msgid "Weekly: —"
+msgstr "周使用量：—"
+
+msgid "Session: —"
+msgstr "会话使用量：—"
+
+msgid "Resets: —"
+msgstr "重置时间：—"
+
+# extension.js — popup menu (format strings)
+msgid "Weekly: %d%%"
+msgstr "周使用量：%d%%"
+
+msgid "Session: %d%%"
+msgstr "会话使用量：%d%%"
+
+msgid "Session resets in %dh %dm"
+msgstr "会话 %d 小时 %d 分钟后重置"
+
+msgid "Session resetting…"
+msgstr "会话正在重置…"

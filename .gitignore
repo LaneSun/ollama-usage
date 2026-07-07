@@ -1,0 +1,11 @@
+# Build artifacts
+schemas/gschemas.compiled
+locale/
+
+# Packaging
+*.zip
+
+# Editor
+*.swp
+*.swo
+*~

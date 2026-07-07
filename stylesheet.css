@@ -1,0 +1,8 @@
+.ollama-cloud-indicator {
+    padding: 0 6px;
+}
+
+.ollama-cloud-indicator > St.DrawingArea {
+    x-align: center;
+    y-align: center;
+}

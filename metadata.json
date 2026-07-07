@@ -1,0 +1,12 @@
+{
+  "name": "Ollama Cloud Indicator",
+  "description": "Display Ollama Cloud subscription usage with a circular indicator in the top panel.",
+  "gettext-domain": "gnome-shell-extensions",
+  "settings-schema": "org.gnome.shell.extensions.ollama-usage",
+  "uuid": "ollama-usage@lanesun.anlbrain.com",
+  "shell-version": ["47", "48", "49", "50"],
+  "url": "https://github.com/LaneSun/ollama-usage",
+  "donations": {
+    "kofi": "lanesun45182"
+  }
+}
