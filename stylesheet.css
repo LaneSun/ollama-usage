@@ -6,3 +6,41 @@
     x-align: center;
     y-align: center;
 }
+
+.popup-sub-menu .ollama-cloud-chart-title {
+    font-weight: bold;
+    padding: 3px 16px;
+}
+
+.popup-sub-menu .ollama-cloud-chart-empty {
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 3px 16px;
+}
+
+.popup-sub-menu .ollama-cloud-chart-grid {
+    padding: 3px 16px;
+}
+
+.ollama-cloud-chart-label {
+    min-width: 80px;
+}
+
+.ollama-cloud-chart-value {
+    min-width: 24px;
+    text-align: right;
+}
+
+.ollama-cloud-chart-bar {
+    width: 160px;
+    height: 8px;
+    border-radius: 0;
+    background-color: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+}
+
+.ollama-cloud-chart-bar-fill {
+    height: 8px;
+    border-radius: 0;
+    background-color: white;
+}

@@ -114,12 +114,6 @@ msgstr "周使用量：—"
 msgid "Session: —"
 msgstr "会话使用量：—"
 
-msgid "Session resets: —"
-msgstr "会话重置：—"
-
-msgid "Weekly resets: —"
-msgstr "周重置：—"
-
 # extension.js — popup menu (format strings)
 msgid "Weekly: %d%%"
 msgstr "周使用量：%d%%"
@@ -127,14 +121,23 @@ msgstr "周使用量：%d%%"
 msgid "Session: %d%%"
 msgstr "会话使用量：%d%%"
 
-msgid "Session resets in %dh %dm"
-msgstr "会话 %d 小时 %d 分钟后重置"
+msgid "Weekly: %d%% (%s)"
+msgstr "周使用量：%d%%（%s）"
 
-msgid "Session resetting…"
-msgstr "会话正在重置…"
+msgid "Session: %d%% (%s)"
+msgstr "会话使用量：%d%%（%s）"
 
-msgid "Weekly resets in %dd %dh"
-msgstr "周 %d 天 %d 小时后重置"
+msgid "resetting…"
+msgstr "正在重置…"
 
-msgid "Weekly resetting…"
-msgstr "周正在重置…"
+msgid "%dd %dh"
+msgstr "%d天%d小时"
+
+msgid "%dh %dm"
+msgstr "%d小时%d分"
+
+msgid "Calls per 1% weekly usage"
+msgstr "每1%周用量可调用次数"
+
+msgid "No model breakdown available"
+msgstr "无模型用量数据"

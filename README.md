@@ -9,7 +9,7 @@ A GNOME Shell extension that displays your [Ollama Cloud](https://ollama.com) su
 - **Outer Ring** — Session usage (5-hour rolling window)
 - **Inner Circle** — Weekly usage
 - **Clock Hand** — A pointer rotating around the ring, indicating how far through the current session window you are (0% at start → 100% at reset)
-- **Popup Menu** — Click the indicator to see exact percentages, time until session reset, and a manual refresh button
+- **Popup Menu** — Click the indicator to see exact percentages with time-to-reset in parentheses (e.g. `Weekly: 95% (0d 21h)`), a horizontal bar chart ranking models by calls per 1% of weekly usage, and a manual refresh button
 - **Auto Refresh** — Fetches data every 60 seconds (configurable)
 - **Retry on Failure** — If the initial fetch fails, retries 3 times with 1s / 2s / 4s backoff
 
