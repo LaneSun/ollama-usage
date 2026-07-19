@@ -451,11 +451,7 @@ export default class OllamaCloudExtension extends Extension {
 
     _recreateHttpSession() {
         if (this._httpSession) {
-            try {
-                this._httpSession.abort();
-            } catch (e) {
-                console.debug(`[ollama-usage] session abort error: ${e}`);
-            }
+            this._httpSession.abort();
             this._httpSession = null;
         }
         if (this._watchdogId !== null) {
@@ -710,11 +706,7 @@ export default class OllamaCloudExtension extends Extension {
             this._indicator = null;
         }
         if (this._httpSession) {
-            try {
-                this._httpSession.abort();
-            } catch (e) {
-                console.debug(`[ollama-usage] disable abort error: ${e}`);
-            }
+            this._httpSession.abort();
             this._httpSession = null;
             this._httpSessionGen++;
             this._inFlight = false;
