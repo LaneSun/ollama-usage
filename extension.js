@@ -216,6 +216,7 @@ class OllamaIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(this._chartSection);
 
         this._timeoutId = null;
+        this._tickCount = 0;
         this._ensureTimeout();
 
         this._settings.connectObject(
@@ -565,7 +566,7 @@ export default class OllamaCloudExtension extends Extension {
                         const bytes = session.send_and_read_finish(result);
                         const text = new TextDecoder().decode(bytes.get_data());
                         const data = this._parseHtml(text);
-                        const ok = data.fiveHour > 0 || data.weekly > 0;
+                        const ok = data.found;
                         this._applyData(data, ok);
                         settle(ok);
                     } catch (e) {
@@ -595,16 +596,19 @@ export default class OllamaCloudExtension extends Extension {
             sessionResetTs: null,
             weeklyResetTs: null,
             models: [],
+            found: false,
         };
 
         let m = html.match(/aria-label="Session usage\s+([\d.]+)%\s*used"/);
         if (m) {
             data.fiveHour = Math.min(parseFloat(m[1]) / 100, 1.0);
+            data.found = true;
         }
 
         m = html.match(/aria-label="Weekly usage\s+([\d.]+)%\s*used"/);
         if (m) {
             data.weekly = Math.min(parseFloat(m[1]) / 100, 1.0);
+            data.found = true;
         }
 
         const sessionIdx = html.indexOf('Session usage');
