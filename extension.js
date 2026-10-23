@@ -63,16 +63,20 @@ class IndicatorDrawingArea extends St.DrawingArea {
 
         const ringColor = this._parseColor(this._settings.get_string('ring-color'));
 
+        const hasSession = this._usageData.hasSession !== false;
+
         cr.setLineWidth(ringThickness);
         cr.setLineCap(Cairo.LineCap.ROUND);
         cr.setSourceRGBA(ringColor.r, ringColor.g, ringColor.b, ringColor.a * 0.2);
         cr.arc(cx, cy, ringRadius, 0, 2 * Math.PI);
         cr.stroke();
 
-        const sessionAngle = this._usageData.fiveHour * 2 * Math.PI;
-        cr.setSourceRGBA(ringColor.r, ringColor.g, ringColor.b, ringColor.a);
-        cr.arc(cx, cy, ringRadius, -Math.PI / 2, -Math.PI / 2 + sessionAngle);
-        cr.stroke();
+        if (hasSession) {
+            const sessionAngle = this._usageData.fiveHour * 2 * Math.PI;
+            cr.setSourceRGBA(ringColor.r, ringColor.g, ringColor.b, ringColor.a);
+            cr.arc(cx, cy, ringRadius, -Math.PI / 2, -Math.PI / 2 + sessionAngle);
+            cr.stroke();
+        }
 
         const circleColor = this._parseColor(this._settings.get_string('circle-color'));
 
@@ -85,6 +89,9 @@ class IndicatorDrawingArea extends St.DrawingArea {
         cr.moveTo(cx, cy);
         cr.arc(cx, cy, circleRadius, -Math.PI / 2, -Math.PI / 2 + weeklyAngle);
         cr.fill();
+
+        if (!hasSession)
+            return;
 
         const handLength = this._settings.get_double('hand-length');
         const handThickness = this._settings.get_double('hand-thickness');
@@ -207,7 +214,7 @@ class OllamaIndicator extends PanelMenu.Button {
         this._chartSep = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this._chartSep);
 
-        this._chartTitleItem = new PopupMenu.PopupMenuItem(_('Calls per 1% weekly usage'));
+        this._chartTitleItem = new PopupMenu.PopupMenuItem(_('Calls per 1% usage'));
         this._chartTitleItem.setSensitive(false);
         this._chartTitleItem.actor.add_style_class_name('ollama-cloud-chart-title');
         this.menu.addMenuItem(this._chartTitleItem);
@@ -265,23 +272,46 @@ class OllamaIndicator extends PanelMenu.Button {
             this._renderChart(null);
             return;
         }
-        const weeklyPct = Math.round(data.weekly * 100);
-        const sessionPct = Math.round(data.fiveHour * 100);
+
         this._statusItem.label.set_text(_('Last fetch: OK'));
 
-        const weeklyReset = this._formatReset(data.weeklyResetTs, 'dh');
-        this._weeklyItem.label.set_text(
-            weeklyReset
-                ? _('Weekly: %d%% (%s)').format(weeklyPct, weeklyReset)
-                : _('Weekly: %d%%').format(weeklyPct)
-        );
+        // New credit-based plan format
+        if (data.creditsUsed !== null && data.creditsTotal !== null) {
+            const plan = data.planType ? ` (${data.planType})` : '';
+            const used = data.creditsUsed.toFixed(2);
+            const total = data.creditsTotal.toFixed(2);
+            const remaining = (data.creditsTotal - data.creditsUsed).toFixed(2);
+            this._weeklyItem.label.set_text(
+                _('Used: %s%s / %s%s%s').format(
+                    data.creditsCurrency, used, data.creditsCurrency, total, plan
+                )
+            );
 
-        const sessionReset = this._formatReset(data.sessionResetTs, 'hm');
-        this._sessionItem.label.set_text(
-            sessionReset
-                ? _('Session: %d%% (%s)').format(sessionPct, sessionReset)
-                : _('Session: %d%%').format(sessionPct)
-        );
+            const refillReset = this._formatReset(data.weeklyResetTs, 'dh');
+            this._sessionItem.label.set_text(
+                refillReset
+                    ? _('Remaining: %s%s (refills in %s)').format(data.creditsCurrency, remaining, refillReset)
+                    : _('Remaining: %s%s').format(data.creditsCurrency, remaining)
+            );
+        } else {
+            // Old percentage-based plan format
+            const weeklyPct = Math.round(data.weekly * 100);
+            const sessionPct = Math.round(data.fiveHour * 100);
+
+            const weeklyReset = this._formatReset(data.weeklyResetTs, 'dh');
+            this._weeklyItem.label.set_text(
+                weeklyReset
+                    ? _('Weekly: %d%% (%s)').format(weeklyPct, weeklyReset)
+                    : _('Weekly: %d%%').format(weeklyPct)
+            );
+
+            const sessionReset = this._formatReset(data.sessionResetTs, 'hm');
+            this._sessionItem.label.set_text(
+                sessionReset
+                    ? _('Session: %d%% (%s)').format(sessionPct, sessionReset)
+                    : _('Session: %d%%').format(sessionPct)
+            );
+        }
 
         this._renderChart(data);
     }
@@ -493,7 +523,15 @@ export default class OllamaCloudExtension extends Extension {
     _fetchData(retryCallback) {
         const sessionValue = this._settings.get_string('ollama-cookie');
         if (!sessionValue) {
-            this._applyData({ weekly: 0, fiveHour: 0, timeFraction: 0 }, false);
+            this._applyData({
+                weekly: 0,
+                fiveHour: 0,
+                timeFraction: 0,
+                planType: null,
+                creditsTotal: null,
+                creditsUsed: null,
+                creditsCurrency: '$',
+            }, false);
             if (retryCallback) retryCallback(false);
             return;
         }
@@ -571,7 +609,15 @@ export default class OllamaCloudExtension extends Extension {
                         settle(ok);
                     } catch (e) {
                         console.debug(`[ollama-usage] fetch error: ${e}`);
-                        this._applyData({ weekly: 0, fiveHour: 0, timeFraction: 0 }, false);
+                        this._applyData({
+                            weekly: 0,
+                            fiveHour: 0,
+                            timeFraction: 0,
+                            planType: null,
+                            creditsTotal: null,
+                            creditsUsed: null,
+                            creditsCurrency: '$',
+                        }, false);
                         settle(false);
                     }
                 }
@@ -583,7 +629,15 @@ export default class OllamaCloudExtension extends Extension {
                 GLib.source_remove(this._watchdogId);
                 this._watchdogId = null;
             }
-            this._applyData({ weekly: 0, fiveHour: 0, timeFraction: 0 }, false);
+            this._applyData({
+                weekly: 0,
+                fiveHour: 0,
+                timeFraction: 0,
+                planType: null,
+                creditsTotal: null,
+                creditsUsed: null,
+                creditsCurrency: '$',
+            }, false);
             settle(false);
         }
     }
@@ -597,42 +651,94 @@ export default class OllamaCloudExtension extends Extension {
             weeklyResetTs: null,
             models: [],
             found: false,
+            planType: null,
+            creditsTotal: null,
+            creditsUsed: null,
+            creditsCurrency: '$',
+            hasSession: true,
         };
 
-        let m = html.match(/aria-label="Session usage\s+([\d.]+)%\s*used"/);
-        if (m) {
-            data.fiveHour = Math.min(parseFloat(m[1]) / 100, 1.0);
-            data.found = true;
-        }
+        // Try new pricing plan format (credit-based)
+        this._parseCreditsFormat(html, data);
 
-        m = html.match(/aria-label="Weekly usage\s+([\d.]+)%\s*used"/);
-        if (m) {
-            data.weekly = Math.min(parseFloat(m[1]) / 100, 1.0);
-            data.found = true;
-        }
-
-        const sessionIdx = html.indexOf('Session usage');
-        if (sessionIdx >= 0) {
-            const afterSession = html.substring(sessionIdx);
-            m = afterSession.match(/data-time="([^"]+)"/);
+        // Fall back to old usage percentage format
+        if (!data.found) {
+            let m = html.match(/aria-label="Session usage\s+([\d.]+)%\s*used"/);
             if (m) {
-                const dt = new Date(m[1]);
-                data.sessionResetTs = dt.getTime() / 1000;
+                data.fiveHour = Math.min(parseFloat(m[1]) / 100, 1.0);
+                data.found = true;
             }
-        }
 
-        const weeklyIdx = html.indexOf('Weekly usage');
-        if (weeklyIdx >= 0) {
-            const afterWeekly = html.substring(weeklyIdx);
-            m = afterWeekly.match(/data-time="([^"]+)"/);
+            m = html.match(/aria-label="Weekly usage\s+([\d.]+)%\s*used"/);
             if (m) {
-                const dt = new Date(m[1]);
-                data.weeklyResetTs = dt.getTime() / 1000;
+                data.weekly = Math.min(parseFloat(m[1]) / 100, 1.0);
+                data.found = true;
             }
+
+            const sessionIdx = html.indexOf('Session usage');
+            if (sessionIdx >= 0) {
+                const afterSession = html.substring(sessionIdx);
+                m = afterSession.match(/data-time="([^"]+)"/);
+                if (m) {
+                    const dt = new Date(m[1]);
+                    data.sessionResetTs = dt.getTime() / 1000;
+                }
+            }
+
+            const weeklyIdx = html.indexOf('Weekly usage');
+            if (weeklyIdx >= 0) {
+                const afterWeekly = html.substring(weeklyIdx);
+                m = afterWeekly.match(/data-time="([^"]+)"/);
+                if (m) {
+                    const dt = new Date(m[1]);
+                    data.weeklyResetTs = dt.getTime() / 1000;
+                }
+            }
+
+            data.models = this._parseModels(html, weeklyIdx);
         }
 
-        data.models = this._parseModels(html, weeklyIdx);
         return data;
+    }
+
+    _parseCreditsFormat(html, data) {
+        // Plan badge sits right after the heading, e.g.:
+        // <h2>Usage credits<span class="... capitalize">pro</span></h2>
+        let m = html.match(/Usage credits\s*<span[^>]*>\s*([^<]+?)\s*<\/span>/i);
+        if (m) {
+            const plan = m[1].trim();
+            data.planType = plan.charAt(0).toUpperCase() + plan.slice(1);
+        }
+
+        // The progress bar's aria-label is the only place both numbers are
+        // guaranteed to appear together and unambiguously:
+        // aria-label="Monthly credits used: $2.33 of $60"
+        const ariaRe = /aria-label="Monthly credits used:\s*\$([\d,.]+)\s*of\s*\$([\d,.]+)"/i;
+        m = html.match(ariaRe);
+        if (!m)
+            return;
+
+        data.creditsUsed = parseFloat(m[1].replace(/,/g, ''));
+        data.creditsTotal = parseFloat(m[2].replace(/,/g, ''));
+        data.weekly = data.creditsTotal > 0 ? Math.min(data.creditsUsed / data.creditsTotal, 1.0) : 0;
+        data.found = true;
+        data.hasSession = false;
+
+        // Refill date from the balance tooltip, e.g.:
+        // "Refills to $60 on November 21, 2026."
+        m = html.match(/Refills to \$[\d,.]+ on ([A-Za-z]+ \d{1,2},?\s*\d{4})/i);
+        if (m) {
+            const dt = new Date(m[1]);
+            if (!isNaN(dt.getTime()))
+                data.weeklyResetTs = dt.getTime() / 1000;
+        }
+
+        // Anchor model parsing on the meter we just matched, bounded by the
+        // next meter (if any), same pattern as the legacy parser below.
+        const ariaIdx = html.search(ariaRe);
+        const nextMeter = html.indexOf('data-usage-meter', ariaIdx + 1);
+        const blockEnd = nextMeter >= 0 ? nextMeter : html.length;
+        data.models = this._extractUsageSegments(html.substring(ariaIdx, blockEnd));
     }
 
     _parseModels(html, weeklyIdx) {
@@ -645,8 +751,10 @@ export default class OllamaCloudExtension extends Extension {
             return [];
         const nextMeter = html.indexOf('data-usage-meter', ariaIdx);
         const blockEnd = nextMeter >= 0 ? nextMeter : html.length;
-        const block = html.substring(ariaIdx, blockEnd);
+        return this._extractUsageSegments(html.substring(ariaIdx, blockEnd));
+    }
 
+    _extractUsageSegments(block) {
         const segRe = /<button[^>]*data-usage-segment[^>]*>/g;
         const widthRe = /width:\s*([\d.]+)%/;
         const modelRe = /data-model="([^"]+)"/;
@@ -682,7 +790,18 @@ export default class OllamaCloudExtension extends Extension {
                 this._indicator?.updateMenu(this._lastData, true);
                 return;
             }
-            data = { weekly: 0, fiveHour: 0, timeFraction: 0, sessionResetTs: null, weeklyResetTs: null, models: [] };
+            data = {
+                weekly: 0,
+                fiveHour: 0,
+                timeFraction: 0,
+                sessionResetTs: null,
+                weeklyResetTs: null,
+                models: [],
+                planType: null,
+                creditsTotal: null,
+                creditsUsed: null,
+                creditsCurrency: '$',
+            };
         } else {
             this._lastData = data;
         }
