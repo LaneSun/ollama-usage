@@ -1,7 +1,7 @@
 {
   "name": "Ollama Cloud Indicator",
-  "description": "Display Ollama Cloud subscription usage with a circular indicator in the top panel.",
-  "gettext-domain": "gnome-shell-extensions",
+  "description": "Monitor Ollama Cloud usage for multiple accounts, including monthly credits and legacy subscriptions.",
+  "gettext-domain": "ollama-usage@lanesun.anlbrain.com",
   "settings-schema": "org.gnome.shell.extensions.ollama-usage",
   "uuid": "ollama-usage@lanesun.anlbrain.com",
   "shell-version": ["47", "48", "49", "50"],

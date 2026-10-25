@@ -1,76 +1,88 @@
 # Ollama Cloud 指示器
 
-一个 GNOME Shell 扩展，在顶栏以紧凑的圆形指示器显示你的 [Ollama Cloud](https://ollama.com) 订阅使用量。
+在 GNOME 顶栏显示 [Ollama Cloud](https://ollama.com) 使用量的扩展。支持多个账号、[月度额度套餐](https://ollama.com/blog/transparent-pricing)和旧版订阅，适用于 GNOME Shell 47–50。
 
-![截图](screenshot.png)
+## 使用量显示
 
-## 功能
+**月度额度套餐**：内圆显示当月包含额度的消耗比例。弹出菜单显示已用额度、剩余额度、套餐名称，以及页面提供的下次补充时间。此类套餐不显示会话外环和指针。
 
-- **外环** — 会话使用量（5 小时滚动窗口）
-- **内圆** — 周使用量
-- **指针** — 环绕外环旋转的指针，指示当前会话窗口的进度（0% 开始 → 100% 重置）
-- **弹出菜单** — 点击指示器查看精确百分比及括号内距重置时间（如 `周使用量：95%（0天21小时）`）、按每1%周用量可调用次数排序的模型水平柱状图，以及手动刷新按钮
-- **自动刷新** — 每 60 秒获取一次数据（可配置）
-- **失败重试** — 首次获取失败时，以 1s / 2s / 4s 间隔重试 3 次
+![额度套餐菜单](screenshot-credits.png)
+
+**旧版订阅**：外环显示会话使用量，内圆显示周使用量，指针显示五小时会话窗口的进度。弹出菜单提供精确百分比和重置倒计时。
+
+![旧版套餐菜单](screenshot.png)
+
+两种格式都提供按「每 1% 用量可调用次数」排序的模型图表。该图表来自 Ollama 提供的模型用量分布，不用于预测未来费用。
 
 ## 安装
 
+安装 GNU Make、GLib 开发工具及 gettext 后，从源码安装：
+
 ```bash
-make all
-cp -r . ~/.local/share/gnome-shell/extensions/ollama-usage@lanesun.anlbrain.com/
-glib-compile-schemas ~/.local/share/gnome-shell/extensions/ollama-usage@lanesun.anlbrain.com/schemas/
+make install
 ```
 
-重启 GNOME Shell（Wayland 下需注销重新登录），然后启用扩展：
+运行文件、编译后的设置结构和翻译将安装到 `${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/ollama-usage@lanesun.anlbrain.com/`。
+
+也可以构建并安装 ZIP：
+
+```bash
+./package.sh
+gnome-extensions install --force ollama-usage.zip
+```
+
+Wayland 下注销并重新登录，然后启用扩展：
 
 ```bash
 gnome-extensions enable ollama-usage@lanesun.anlbrain.com
 ```
 
-## Cookie 设置
+生成的 `ollama-usage.zip` 也可上传至 GNOME Extensions。打包会重新编译翻译，包含全部运行模块和样式，排除凭据、测试、版本控制目录及编译后的 schema；GNOME 会在安装时编译 schema。
 
-扩展从 `https://ollama.com/settings` 获取使用量数据，该页面需要身份验证。你需要提供 `__Secure-session` Cookie 的值。
+## 账号和 Cookie
 
-### 如何获取 Cookie
+1. 在浏览器中登录 [Ollama 设置页面](https://ollama.com/settings)。
+2. 打开开发者工具，进入 **Application / Storage → Cookies → https://ollama.com**。
+3. 复制 `__Secure-session` 的值。
+4. 从仪表菜单打开**设置**，或运行：
 
-1. 在浏览器中登录 [ollama.com](https://ollama.com)
-2. 进入 **Settings** 页面（`https://ollama.com/settings`）
-3. 打开浏览器开发者工具（**F12** 或 **Ctrl+Shift+I**）
-4. 进入 **Application** → **Cookies** → `https://ollama.com`
-5. 找到名为 `__Secure-session` 的 Cookie
-6. 复制它的**值**（那串长字符串，不含键名）
+   ```bash
+   gnome-extensions prefs ollama-usage@lanesun.anlbrain.com
+   ```
 
-### 配置扩展
+5. 将值粘贴到主账号的 `__Secure-session` 字段并点击应用按钮，扩展会立即获取数据。
 
-1. 打开扩展设置（通过 **扩展** 应用，或运行 `gnome-extensions prefs ollama-usage@lanesun.anlbrain.com`）
-2. 在 **Ollama Cloud** 下，将 Cookie 值粘贴到 `__Secure-session` 输入框
-3. 下次启用扩展时会立即获取数据，之后每 60 秒自动刷新
+需要同时显示其他账号时，点击**添加账号**，填写名称并应用该账号自己的 Cookie。可通过独立的浏览器配置或切换登录账号获取相应 Cookie。每个账号都有独立的仪表、刷新操作、缓存和错误状态；配置多个账号后，顶栏仪表旁会显示名称。其他账号可通过垃圾桶按钮移除。
 
-> **注意：** 只粘贴 Cookie 的**值**——不要包含键名或外侧引号，扩展会自动拼装。
+升级时，原有 Cookie 继续用作主账号。**重置外观和刷新设置**不会删除账号名称及 Cookie。Cookie 输入框默认隐藏内容，其值保存在用户 GSettings 中，请妥善保管包含这些设置的备份。
 
-## 自定义
+## 外观和刷新
 
-所有视觉参数均可在设置中调整：
+设置支持调整外环、内圆、指针的颜色及尺寸，修改顶栏位置和序号，并将刷新间隔设置为 5–3600 秒（默认 60 秒）。外观设置对所有账号生效。
 
-| 设置项 | 说明 |
-|--------|------|
-| 环形颜色 / 粗细 / 间距 | 外环外观（会话使用量） |
-| 圆形颜色 / 半径 | 内圆外观（周使用量） |
-| 指针颜色 / 长度 / 粗细 | 指针外观 |
-| 指针描边颜色 / 宽度 | 指针边框，提高可见度 |
-| 面板位置 | 左侧 / 居中 / 右侧 |
-| 排列序号 | 面板内排序顺序 |
-| 更新间隔 | 自动刷新间隔，单位秒（默认：60） |
+每个账号单独请求 `https://ollama.com/settings`。网络或 HTTP 临时失败会以 1 / 2 / 4 秒间隔重试三次；卡住的请求会在 35 秒后取消。定时刷新不会打断正在进行的请求；身份验证重定向会停止请求并显示 Cookie 错误。
 
-## 数据来源
+刷新失败后，上次成功的数据仍会保留，但仪表会变暗并明确标注为旧数据。修改 Cookie 会清除旧读数。空白或无法识别的页面不会被当成成功的 0% 用量；真实的 0% 用量可正常识别。
 
-扩展向 `https://ollama.com/settings` 发送带 Cookie 的 GET 请求，解析 HTML 中的：
+数据来自 Ollama 设置页面的 HTML，网站结构变化可能需要更新解析器。额度数值对应当月包含的额度池，不会根据该仪表推算额外购买的余额。
 
-- `Session usage X% used` — 会话（5h）百分比
-- `Weekly usage X% used` — 周百分比
-- `data-time="..."` — 会话重置时间戳（用于指针位置计算）
+## 开发
 
-如果获取失败或未返回使用量数据，所有指示器显示 0%，弹出菜单显示"获取失败——请检查 Cookie"。
+项目不依赖 npm 包。运行测试需要 Node.js 22 或更新版本、GJS、libsoup 3、GLib 工具和 gettext。
+
+```bash
+make test
+./package.sh
+python3 tests/package.test.py
+```
+
+- `usage.js`：两种计费格式的解析及数据校验。
+- `accounts.js`：账号记录和 Cookie 规范化。
+- `client.js`：各账号的 HTTP 请求、缓存及重试生命周期。
+- `extension.js`：顶栏绘制、菜单及账号协调。
+- `prefs.js`：账号管理和外观设置。
+
+测试使用合成 HTML 和本地 HTTP 服务，不使用真实凭据，也不请求 Ollama。GitHub Actions 会执行相同的解析、账号、请求生命周期和安装包检查。
 
 ## 许可证
 

@@ -2,6 +2,9 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ollama-usage\n"
 "Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-10-25 00:00+0800\n"
+"Last-Translator: LaneSun\n"
+"Language-Team: Simplified Chinese\n"
 "Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -141,3 +144,63 @@ msgstr "每1%周用量可调用次数"
 
 msgid "No model breakdown available"
 msgstr "无模型用量数据"
+
+msgid "Primary account"
+msgstr "主账号"
+
+msgid "Each account has its own panel meter. Cookies are stored in your user settings."
+msgstr "每个账号都有独立的顶栏仪表。Cookie 保存在你的用户设置中。"
+
+msgid "Account name"
+msgstr "账号名称"
+
+msgid "Additional accounts"
+msgstr "其他账号"
+
+msgid "Add Account"
+msgstr "添加账号"
+
+msgid "Account %d"
+msgstr "账号 %d"
+
+msgid "Remove Account"
+msgstr "移除账号"
+
+msgid "Inner Circle (Weekly Usage / Monthly Credits)"
+msgstr "内圆（周使用量 / 月度额度）"
+
+msgid "Reset Appearance and Refresh Settings"
+msgstr "重置外观和刷新设置"
+
+msgid "Preferences"
+msgstr "设置"
+
+msgid "Refresh failed — showing last successful data"
+msgstr "刷新失败——显示上次成功获取的数据"
+
+msgid "Set a valid session cookie in Preferences"
+msgstr "请在设置中填写有效的会话 Cookie"
+
+msgid "Session expired — update the cookie in Preferences"
+msgstr "会话已过期——请在设置中更新 Cookie"
+
+msgid "No usage data — check your cookie or Ollama plan"
+msgstr "未找到用量数据——请检查 Cookie 或 Ollama 套餐"
+
+msgid "Fetch failed — check your connection"
+msgstr "获取失败——请检查网络连接"
+
+msgid "Calls per 1% usage"
+msgstr "每 1% 用量可调用次数"
+
+msgid "Used: %s%s / %s%s%s"
+msgstr "已用：%s%s / %s%s%s"
+
+msgid "Remaining: %s%s (refills in %s)"
+msgstr "剩余：%s%s（%s后补充）"
+
+msgid "Remaining: %s%s"
+msgstr "剩余：%s%s"
+
+msgid "Monitor Ollama Cloud usage for multiple accounts, including monthly credits and legacy subscriptions."
+msgstr "监测多个 Ollama Cloud 账号的使用量，支持月度额度和旧版订阅。"
