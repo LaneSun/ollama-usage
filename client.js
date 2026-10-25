@@ -44,6 +44,7 @@ export class UsageClient {
             // Never forward credentials to a redirect destination.
             message.flags |= Soup.MessageFlags.NO_REDIRECT;
             message.request_headers.append('Cookie', `__Secure-session=${this._cookie}`);
+            message.request_headers.append('User-Agent', 'Mozilla/5.0');
             request.watchdog = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this._watchdogSeconds, () => {
                 request.watchdog = null;
                 if (this._request !== request || this._destroyed)

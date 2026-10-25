@@ -33,8 +33,10 @@ const requests = new Map();
 const clients = [];
 let failA = false;
 let redirected = false;
+let userAgent;
 server.add_handler(null, (_server, message, path) => {
     const cookie = message.get_request_headers().get_one('Cookie');
+    userAgent = message.get_request_headers().get_one('User-Agent');
     const key = `${path}:${cookie}`;
     requests.set(key, (requests.get(key) ?? 0) + 1);
     if (path === '/redirect-target')
@@ -81,6 +83,7 @@ async function run() {
     await until(() => a.updates.length && b.updates.length, 'two independent accounts');
     assert(a.instance.data.weekly === 0.25 && a.instance.data.hasSession, 'legacy account data');
     assert(b.instance.data.creditsUsed === 2.33 && !b.instance.data.hasSession, 'credit account data');
+    assert(userAgent === 'Mozilla/5.0', 'preserve the existing settings-page user agent');
     print('PASS: independent cookies, caches and pricing formats');
 
     failA = true;
