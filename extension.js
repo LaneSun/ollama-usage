@@ -2,7 +2,6 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
-import Soup from 'gi://Soup';
 import Cairo from 'gi://cairo';
 
 import { Extension, gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -10,8 +9,11 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
+import {additionalAccounts, PRIMARY_ACCOUNT} from './accounts.js';
+import {UsageClient} from './client.js';
+import {clampFraction, emptyUsage} from './usage.js';
+
 const MARGIN = 2;
-const OLLAMA_URL = 'https://ollama.com/settings';
 const CHART_BAR_PX = 160;
 const MIN_BAR_FILL_PX = 2;
 
@@ -20,12 +22,7 @@ class IndicatorDrawingArea extends St.DrawingArea {
     _init(settings) {
         this._settings = settings;
         super._init({ reactive: false });
-        this._usageData = {
-            weekly: 0.0,
-            fiveHour: 0.0,
-            timeFraction: 0.0,
-        };
-        this._fetchOk = false;
+        this._usageData = emptyUsage();
         this._updateSize();
         this._updateTimeFraction();
     }
@@ -65,14 +62,13 @@ class IndicatorDrawingArea extends St.DrawingArea {
 
         const hasSession = this._usageData.hasSession !== false;
 
-        cr.setLineWidth(ringThickness);
-        cr.setLineCap(Cairo.LineCap.ROUND);
-        cr.setSourceRGBA(ringColor.r, ringColor.g, ringColor.b, ringColor.a * 0.2);
-        cr.arc(cx, cy, ringRadius, 0, 2 * Math.PI);
-        cr.stroke();
-
         if (hasSession) {
-            const sessionAngle = this._usageData.fiveHour * 2 * Math.PI;
+            cr.setLineWidth(ringThickness);
+            cr.setLineCap(Cairo.LineCap.ROUND);
+            cr.setSourceRGBA(ringColor.r, ringColor.g, ringColor.b, ringColor.a * 0.2);
+            cr.arc(cx, cy, ringRadius, 0, 2 * Math.PI);
+            cr.stroke();
+            const sessionAngle = clampFraction(this._usageData.fiveHour) * 2 * Math.PI;
             cr.setSourceRGBA(ringColor.r, ringColor.g, ringColor.b, ringColor.a);
             cr.arc(cx, cy, ringRadius, -Math.PI / 2, -Math.PI / 2 + sessionAngle);
             cr.stroke();
@@ -84,7 +80,7 @@ class IndicatorDrawingArea extends St.DrawingArea {
         cr.arc(cx, cy, circleRadius, 0, 2 * Math.PI);
         cr.fill();
 
-        const weeklyAngle = this._usageData.weekly * 2 * Math.PI;
+        const weeklyAngle = clampFraction(this._usageData.weekly) * 2 * Math.PI;
         cr.setSourceRGBA(circleColor.r, circleColor.g, circleColor.b, circleColor.a);
         cr.moveTo(cx, cy);
         cr.arc(cx, cy, circleRadius, -Math.PI / 2, -Math.PI / 2 + weeklyAngle);
@@ -149,9 +145,8 @@ class IndicatorDrawingArea extends St.DrawingArea {
         return { r: 1, g: 1, b: 1, a: 1 };
     }
 
-    setUsageData(data, fetchOk) {
+    setUsageData(data) {
         this._usageData = data;
-        this._fetchOk = fetchOk;
         this._updateTimeFraction();
         this.queue_repaint();
     }
@@ -176,51 +171,60 @@ class IndicatorDrawingArea extends St.DrawingArea {
 
 const OllamaIndicator = GObject.registerClass(
 class OllamaIndicator extends PanelMenu.Button {
-    _init(extension, settings) {
-        super._init(0.5, 'Ollama Cloud Indicator', false);
-        this._extension = extension;
+    _init(extension, settings, account, showName) {
+        super._init(0.5, `${_('Ollama Cloud')} — ${account.name}`, false);
+        this._account = account;
         this._settings = settings;
+        this._data = null;
+        this._error = null;
 
+        const box = new St.BoxLayout({style_class: 'ollama-cloud-indicator'});
         this._drawingArea = new IndicatorDrawingArea(settings);
         this._drawingArea.set_y_align(Clutter.ActorAlign.CENTER);
         this._drawingArea.set_x_align(Clutter.ActorAlign.CENTER);
-        this.add_child(this._drawingArea);
+        box.add_child(this._drawingArea);
+        if (showName) {
+            const characters = Array.from(account.name);
+            const text = characters.length > 12 ? `${characters.slice(0, 12).join('')}…` : account.name;
+            box.add_child(new St.Label({text, y_align: Clutter.ActorAlign.CENTER}));
+        }
+        this.add_child(box);
 
-        this._titleItem = new PopupMenu.PopupMenuItem(_('Ollama Cloud'));
-        this._titleItem.setSensitive(false);
+        this._titleItem = new PopupMenu.PopupMenuItem(`${_('Ollama Cloud')} — ${account.name}`, {reactive: false, can_focus: false});
         this.menu.addMenuItem(this._titleItem);
 
         this._refreshItem = new PopupMenu.PopupMenuItem(_('Refresh Now'));
         this._refreshItem.connectObject('activate', () => {
-            this._extension.fetchData();
+            this._account.client.refresh();
         }, this);
         this.menu.addMenuItem(this._refreshItem);
 
-        this._statusItem = new PopupMenu.PopupMenuItem(_('Not fetched yet'));
-        this._statusItem.setSensitive(false);
+        this._statusItem = new PopupMenu.PopupMenuItem(_('Not fetched yet'), {reactive: false, can_focus: false});
         this.menu.addMenuItem(this._statusItem);
 
         this._menuSep = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this._menuSep);
 
-        this._weeklyItem = new PopupMenu.PopupMenuItem('');
-        this._weeklyItem.setSensitive(false);
+        this._weeklyItem = new PopupMenu.PopupMenuItem('', {reactive: false, can_focus: false});
         this.menu.addMenuItem(this._weeklyItem);
 
-        this._sessionItem = new PopupMenu.PopupMenuItem('');
-        this._sessionItem.setSensitive(false);
+        this._sessionItem = new PopupMenu.PopupMenuItem('', {reactive: false, can_focus: false});
         this.menu.addMenuItem(this._sessionItem);
 
         this._chartSep = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this._chartSep);
 
-        this._chartTitleItem = new PopupMenu.PopupMenuItem(_('Calls per 1% usage'));
-        this._chartTitleItem.setSensitive(false);
+        this._chartTitleItem = new PopupMenu.PopupMenuItem(_('Calls per 1% usage'), {reactive: false, can_focus: false});
         this._chartTitleItem.actor.add_style_class_name('ollama-cloud-chart-title');
         this.menu.addMenuItem(this._chartTitleItem);
 
         this._chartSection = new PopupMenu.PopupMenuSection();
         this.menu.addMenuItem(this._chartSection);
+
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        const preferences = new PopupMenu.PopupMenuItem(_('Preferences'));
+        preferences.connectObject('activate', () => extension.openPreferences(), this);
+        this.menu.addMenuItem(preferences);
 
         this._timeoutId = null;
         this._tickCount = 0;
@@ -254,33 +258,40 @@ class OllamaIndicator extends PanelMenu.Button {
             1,
             () => {
                 this._drawingArea.refresh();
+                if (this.menu.isOpen)
+                    this.updateMenu(this._data, this._error, false);
                 this._tickCount++;
                 if (this._tickCount >= this._settings.get_int('update-interval')) {
                     this._tickCount = 0;
-                    this._extension.fetchData();
+                    this._account.client.refresh();
                 }
                 return GLib.SOURCE_CONTINUE;
             }
         );
     }
 
-    updateMenu(data, fetchOk) {
-        if (!fetchOk) {
-            this._statusItem.label.set_text(_('Fetch failed — check cookie'));
+    updateMenu(data, error, renderChart = true) {
+        this._data = data;
+        this._error = error;
+        if (renderChart) {
+            this._drawingArea.setUsageData(data ?? emptyUsage());
+            this._drawingArea.opacity = error ? 110 : 255;
+            this._renderChart(data);
+        }
+        const status = this._statusText(data, error);
+        this._statusItem.label.set_text(status);
+        this.accessible_name = `${_('Ollama Cloud')} — ${this._account.name}: ${status}`;
+        if (!data) {
             this._weeklyItem.label.set_text(_('Weekly: —'));
             this._sessionItem.label.set_text(_('Session: —'));
-            this._renderChart(null);
             return;
         }
 
-        this._statusItem.label.set_text(_('Last fetch: OK'));
-
-        // New credit-based plan format
         if (data.creditsUsed !== null && data.creditsTotal !== null) {
             const plan = data.planType ? ` (${data.planType})` : '';
             const used = data.creditsUsed.toFixed(2);
             const total = data.creditsTotal.toFixed(2);
-            const remaining = (data.creditsTotal - data.creditsUsed).toFixed(2);
+            const remaining = Math.max(0, data.creditsTotal - data.creditsUsed).toFixed(2);
             this._weeklyItem.label.set_text(
                 _('Used: %s%s / %s%s%s').format(
                     data.creditsCurrency, used, data.creditsCurrency, total, plan
@@ -294,7 +305,6 @@ class OllamaIndicator extends PanelMenu.Button {
                     : _('Remaining: %s%s').format(data.creditsCurrency, remaining)
             );
         } else {
-            // Old percentage-based plan format
             const weeklyPct = Math.round(data.weekly * 100);
             const sessionPct = Math.round(data.fiveHour * 100);
 
@@ -313,7 +323,21 @@ class OllamaIndicator extends PanelMenu.Button {
             );
         }
 
-        this._renderChart(data);
+        this.accessible_name += `; ${this._weeklyItem.label.text}; ${this._sessionItem.label.text}`;
+    }
+
+    _statusText(data, error) {
+        if (error && data)
+            return _('Refresh failed — showing last successful data');
+        if (error === 'cookie')
+            return _('Set a valid session cookie in Preferences');
+        if (error === 'auth')
+            return _('Session expired — update the cookie in Preferences');
+        if (error === 'format')
+            return _('No usage data — check your cookie or Ollama plan');
+        if (error)
+            return _('Fetch failed — check your connection');
+        return data ? _('Last fetch: OK') : _('Not fetched yet');
     }
 
     _formatReset(ts, unitSpec) {
@@ -341,7 +365,7 @@ class OllamaIndicator extends PanelMenu.Button {
             const actualPct = m.widthPct * data.weekly;
             const value = actualPct > 0 ? m.requests / actualPct : 0;
             return { name: m.name, value };
-        }).filter(r => r.value > 0);
+        }).filter(r => Number.isFinite(r.value) && r.value > 0);
         rows.sort((a, b) => b.value - a.value);
 
         if (rows.length === 0) {
@@ -372,8 +396,7 @@ class OllamaIndicator extends PanelMenu.Button {
     }
 
     _addEmptyChartRow() {
-        const empty = new PopupMenu.PopupMenuItem(_('No model breakdown available'));
-        empty.setSensitive(false);
+        const empty = new PopupMenu.PopupMenuItem(_('No model breakdown available'), {reactive: false, can_focus: false});
         empty.actor.add_style_class_name('ollama-cloud-chart-empty');
         this._chartSection.addMenuItem(empty);
     }
@@ -423,417 +446,67 @@ class OllamaIndicator extends PanelMenu.Button {
 export default class OllamaCloudExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
-        this._retryTimerId = null;
-        this._lastData = null;
-        this._inFlight = false;
-        this._httpSession = null;
-        this._httpSessionGen = 0;
-        this._watchdogId = null;
-        this._createIndicator();
-        this._addToPanel();
-
-        this._settings.connectObject(
-            'changed::panel-position', () => this._recreateIndicator(),
-            'changed::panel-index', () => this._recreateIndicator(),
-            this
-        );
-
-        this._ensureHttpSession();
-        this.fetchDataWithRetry(3);
+        this._accounts = new Map();
+        this._settingsHandlers = [
+            'accounts', 'ollama-cookie', 'account-name',
+            'panel-position', 'panel-index',
+        ].map(key => this._settings.connect(`changed::${key}`, () => this._syncAccounts()));
+        this._syncAccounts();
     }
 
-    _createIndicator() {
-        this._indicator = new OllamaIndicator(this, this._settings);
-    }
-
-    _recreateIndicator() {
-        this._removeFromPanel();
-        this._indicator.destroy();
-        this._indicator = null;
-        this._createIndicator();
-        this._addToPanel();
-    }
-
-    _addToPanel() {
-        Main.panel.addToStatusArea(
-            'ollama-cloud-indicator',
-            this._indicator,
-            this._settings.get_int('panel-index'),
-            this._settings.get_string('panel-position')
-        );
-    }
-
-    _removeFromPanel() {
-        const parent = this._indicator.get_parent();
-        if (parent) {
-            parent.remove_child(this._indicator);
-        }
-    }
-
-    _ensureHttpSession() {
-        if (this._httpSession)
-            return;
-        const session = new Soup.Session();
-        session.timeout = 30;
-        session.idle_timeout = 30;
-        this._httpSession = session;
-        this._httpSessionGen++;
-    }
-
-    _recreateHttpSession() {
-        if (this._httpSession) {
-            this._httpSession.abort();
-            this._httpSession = null;
-        }
-        if (this._watchdogId !== null) {
-            GLib.source_remove(this._watchdogId);
-            this._watchdogId = null;
-        }
-        this._inFlight = false;
-        this._ensureHttpSession();
-    }
-
-    fetchData() {
-        // Drop a stuck in-flight request and rebuild the session before
-        // retrying, so a deadlocked connection pool recovers without reloading.
-        if (this._inFlight)
-            this._recreateHttpSession();
-        this.fetchDataWithRetry(3);
-    }
-
-    fetchDataWithRetry(maxRetries) {
-        this._fetchData((ok) => {
-            if (!ok && maxRetries > 0) {
-                const delay = Math.pow(2, 3 - maxRetries);
-                if (this._retryTimerId !== null)
-                    GLib.source_remove(this._retryTimerId);
-                this._retryTimerId = GLib.timeout_add_seconds(
-                    GLib.PRIORITY_DEFAULT,
-                    delay,
-                    () => {
-                        this._retryTimerId = null;
-                        this.fetchDataWithRetry(maxRetries - 1);
-                        return GLib.SOURCE_REMOVE;
-                    }
-                );
+    _syncAccounts() {
+        const definitions = [
+            {
+                id: PRIMARY_ACCOUNT,
+                name: this._settings.get_string('account-name').trim() || _('Primary account'),
+                cookie: this._settings.get_string('ollama-cookie'),
+            },
+            ...additionalAccounts(this._settings.get_value('accounts').deep_unpack())
+                .map((account, index) => ({...account, name: account.name || _('Account %d').format(index + 2)})),
+        ];
+        // Preserve caches on layout edits; replace clients on credential edits.
+        for (const account of this._accounts.values()) {
+            account.indicator?.destroy();
+            account.indicator = null;
+            const next = definitions.find(definition => definition.id === account.id);
+            if (!next || next.cookie !== account.cookie) {
+                account.client.destroy();
+                this._accounts.delete(account.id);
             }
+        }
+        definitions.forEach((definition, index) => {
+            let account = this._accounts.get(definition.id);
+            const isNew = !account;
+            if (isNew) {
+                account = {...definition, indicator: null};
+                account.client = new UsageClient(account.cookie, (data, error) => {
+                    account.indicator?.updateMenu(data, error);
+                });
+                this._accounts.set(account.id, account);
+            }
+            account.name = definition.name;
+            account.indicator = new OllamaIndicator(this, this._settings, account, definitions.length > 1);
+            Main.panel.addToStatusArea(
+                `ollama-cloud-indicator-${account.id}`,
+                account.indicator,
+                this._settings.get_int('panel-index') + index,
+                this._settings.get_string('panel-position')
+            );
+            account.indicator.updateMenu(account.client.data, account.client.error);
+            if (isNew)
+                account.client.refresh();
         });
     }
 
-    _fetchData(retryCallback) {
-        const sessionValue = this._settings.get_string('ollama-cookie');
-        if (!sessionValue) {
-            this._applyData({
-                weekly: 0,
-                fiveHour: 0,
-                timeFraction: 0,
-                planType: null,
-                creditsTotal: null,
-                creditsUsed: null,
-                creditsCurrency: '$',
-            }, false);
-            if (retryCallback) retryCallback(false);
-            return;
-        }
-
-        // Never overlap two requests on the same session — a pending request
-        // means the previous callback never fired (stuck socket I/O).
-        if (this._inFlight)
-            this._recreateHttpSession();
-
-        this._ensureHttpSession();
-        const gen = this._httpSessionGen;
-
-        // Guarantee retryCallback runs exactly once even if the async callback
-        // is dropped (GNOME/libsoup#256); the watchdog below is the fallback.
-        let settled = false;
-        const settle = (ok) => {
-            if (settled)
-                return;
-            settled = true;
-            if (this._watchdogId !== null) {
-                GLib.source_remove(this._watchdogId);
-                this._watchdogId = null;
-            }
-            if (retryCallback) retryCallback(ok);
-        };
-
-        try {
-            const cookie = `__Secure-session="${sessionValue}"`;
-            const msg = Soup.Message.new('GET', OLLAMA_URL);
-            msg.request_headers.append('Cookie', cookie);
-            msg.request_headers.append('User-Agent', 'Mozilla/5.0');
-
-            this._inFlight = true;
-
-            // Watchdog: if the callback hasn't fired within 35s (5s past the
-            // 30s socket timeout), the libsoup HTTP/2 callback-dropping bug
-            // has struck (GNOME/libsoup#256). Force-settle + rebuild the
-            // connection pool via a plain GLib timeout, unaffected by the bug.
-            this._watchdogId = GLib.timeout_add_seconds(
-                GLib.PRIORITY_DEFAULT,
-                35,
-                () => {
-                    this._watchdogId = null;
-                    if (gen !== this._httpSessionGen)
-                        return GLib.SOURCE_REMOVE;
-                    if (!this._inFlight)
-                        return GLib.SOURCE_REMOVE;
-                    console.debug('[ollama-usage] fetch watchdog: callback never fired, rebuilding session');
-                    this._inFlight = false;
-                    this._recreateHttpSession();
-                    settle(false);
-                    return GLib.SOURCE_REMOVE;
-                }
-            );
-
-            this._httpSession.send_and_read_async(
-                msg,
-                GLib.PRIORITY_DEFAULT,
-                null,
-                (session, result) => {
-                    // Stale callback: session was aborted/recreated mid-flight
-                    // (watchdog or competing fetch). The recreating caller
-                    // already settled and started its own fetch.
-                    if (gen !== this._httpSessionGen) {
-                        settle(false);
-                        return;
-                    }
-                    this._inFlight = false;
-                    try {
-                        const bytes = session.send_and_read_finish(result);
-                        const text = new TextDecoder().decode(bytes.get_data());
-                        const data = this._parseHtml(text);
-                        const ok = data.found;
-                        this._applyData(data, ok);
-                        settle(ok);
-                    } catch (e) {
-                        console.debug(`[ollama-usage] fetch error: ${e}`);
-                        this._applyData({
-                            weekly: 0,
-                            fiveHour: 0,
-                            timeFraction: 0,
-                            planType: null,
-                            creditsTotal: null,
-                            creditsUsed: null,
-                            creditsCurrency: '$',
-                        }, false);
-                        settle(false);
-                    }
-                }
-            );
-        } catch (e) {
-            console.debug(`[ollama-usage] fetch setup error: ${e}`);
-            this._inFlight = false;
-            if (this._watchdogId !== null) {
-                GLib.source_remove(this._watchdogId);
-                this._watchdogId = null;
-            }
-            this._applyData({
-                weekly: 0,
-                fiveHour: 0,
-                timeFraction: 0,
-                planType: null,
-                creditsTotal: null,
-                creditsUsed: null,
-                creditsCurrency: '$',
-            }, false);
-            settle(false);
-        }
-    }
-
-    _parseHtml(html) {
-        const data = {
-            weekly: 0.0,
-            fiveHour: 0.0,
-            timeFraction: 0.0,
-            sessionResetTs: null,
-            weeklyResetTs: null,
-            models: [],
-            found: false,
-            planType: null,
-            creditsTotal: null,
-            creditsUsed: null,
-            creditsCurrency: '$',
-            hasSession: true,
-        };
-
-        // Try new pricing plan format (credit-based)
-        this._parseCreditsFormat(html, data);
-
-        // Fall back to old usage percentage format
-        if (!data.found) {
-            let m = html.match(/aria-label="Session usage\s+([\d.]+)%\s*used"/);
-            if (m) {
-                data.fiveHour = Math.min(parseFloat(m[1]) / 100, 1.0);
-                data.found = true;
-            }
-
-            m = html.match(/aria-label="Weekly usage\s+([\d.]+)%\s*used"/);
-            if (m) {
-                data.weekly = Math.min(parseFloat(m[1]) / 100, 1.0);
-                data.found = true;
-            }
-
-            const sessionIdx = html.indexOf('Session usage');
-            if (sessionIdx >= 0) {
-                const afterSession = html.substring(sessionIdx);
-                m = afterSession.match(/data-time="([^"]+)"/);
-                if (m) {
-                    const dt = new Date(m[1]);
-                    data.sessionResetTs = dt.getTime() / 1000;
-                }
-            }
-
-            const weeklyIdx = html.indexOf('Weekly usage');
-            if (weeklyIdx >= 0) {
-                const afterWeekly = html.substring(weeklyIdx);
-                m = afterWeekly.match(/data-time="([^"]+)"/);
-                if (m) {
-                    const dt = new Date(m[1]);
-                    data.weeklyResetTs = dt.getTime() / 1000;
-                }
-            }
-
-            data.models = this._parseModels(html, weeklyIdx);
-        }
-
-        return data;
-    }
-
-    _parseCreditsFormat(html, data) {
-        // Plan badge sits right after the heading, e.g.:
-        // <h2>Usage credits<span class="... capitalize">pro</span></h2>
-        let m = html.match(/Usage credits\s*<span[^>]*>\s*([^<]+?)\s*<\/span>/i);
-        if (m) {
-            const plan = m[1].trim();
-            data.planType = plan.charAt(0).toUpperCase() + plan.slice(1);
-        }
-
-        // The progress bar's aria-label is the only place both numbers are
-        // guaranteed to appear together and unambiguously:
-        // aria-label="Monthly credits used: $2.33 of $60"
-        const ariaRe = /aria-label="Monthly credits used:\s*\$([\d,.]+)\s*of\s*\$([\d,.]+)"/i;
-        m = html.match(ariaRe);
-        if (!m)
-            return;
-
-        data.creditsUsed = parseFloat(m[1].replace(/,/g, ''));
-        data.creditsTotal = parseFloat(m[2].replace(/,/g, ''));
-        data.weekly = data.creditsTotal > 0 ? Math.min(data.creditsUsed / data.creditsTotal, 1.0) : 0;
-        data.found = true;
-        data.hasSession = false;
-
-        // Refill date from the balance tooltip, e.g.:
-        // "Refills to $60 on November 21, 2026."
-        m = html.match(/Refills to \$[\d,.]+ on ([A-Za-z]+ \d{1,2},?\s*\d{4})/i);
-        if (m) {
-            const dt = new Date(m[1]);
-            if (!isNaN(dt.getTime()))
-                data.weeklyResetTs = dt.getTime() / 1000;
-        }
-
-        // Anchor model parsing on the meter we just matched, bounded by the
-        // next meter (if any), same pattern as the legacy parser below.
-        const ariaIdx = html.search(ariaRe);
-        const nextMeter = html.indexOf('data-usage-meter', ariaIdx + 1);
-        const blockEnd = nextMeter >= 0 ? nextMeter : html.length;
-        data.models = this._extractUsageSegments(html.substring(ariaIdx, blockEnd));
-    }
-
-    _parseModels(html, weeklyIdx) {
-        if (weeklyIdx < 0)
-            return [];
-        // Anchor on the weekly track's aria-label, not the visible "Weekly
-        // usage" span (which can appear earlier in the DOM).
-        const ariaIdx = html.indexOf('aria-label="Weekly usage', weeklyIdx);
-        if (ariaIdx < 0)
-            return [];
-        const nextMeter = html.indexOf('data-usage-meter', ariaIdx);
-        const blockEnd = nextMeter >= 0 ? nextMeter : html.length;
-        return this._extractUsageSegments(html.substring(ariaIdx, blockEnd));
-    }
-
-    _extractUsageSegments(block) {
-        const segRe = /<button[^>]*data-usage-segment[^>]*>/g;
-        const widthRe = /width:\s*([\d.]+)%/;
-        const modelRe = /data-model="([^"]+)"/;
-        const reqRe = /data-requests="([^"]+)"/;
-
-        const byName = new Map();
-        let sm;
-        while ((sm = segRe.exec(block)) !== null) {
-            const tag = sm[0];
-            const mm = tag.match(modelRe);
-            const rm = tag.match(reqRe);
-            if (!mm || !rm)
-                continue;
-            const name = mm[1];
-            const requests = parseInt(rm[1], 10);
-            const wm = tag.match(widthRe);
-            const widthPct = wm ? parseFloat(wm[1]) : 0;
-            const existing = byName.get(name);
-            if (existing) {
-                existing.requests += requests;
-                existing.widthPct += widthPct;
-            } else {
-                byName.set(name, { name, requests, widthPct });
-            }
-        }
-        return [...byName.values()];
-    }
-
-    _applyData(data, fetchOk) {
-        if (!fetchOk) {
-            if (this._lastData) {
-                this._indicator?._drawingArea.setUsageData(this._lastData, true);
-                this._indicator?.updateMenu(this._lastData, true);
-                return;
-            }
-            data = {
-                weekly: 0,
-                fiveHour: 0,
-                timeFraction: 0,
-                sessionResetTs: null,
-                weeklyResetTs: null,
-                models: [],
-                planType: null,
-                creditsTotal: null,
-                creditsUsed: null,
-                creditsCurrency: '$',
-            };
-        } else {
-            this._lastData = data;
-        }
-        if (this._indicator) {
-            this._indicator._drawingArea.setUsageData(data, fetchOk);
-            this._indicator.updateMenu(data, fetchOk);
-        }
-    }
-
     disable() {
-        if (this._retryTimerId !== null) {
-            GLib.source_remove(this._retryTimerId);
-            this._retryTimerId = null;
+        for (const id of this._settingsHandlers ?? [])
+            this._settings.disconnect(id);
+        this._settingsHandlers = [];
+        for (const account of this._accounts?.values() ?? []) {
+            account.client.destroy();
+            account.indicator?.destroy();
         }
-        if (this._watchdogId !== null) {
-            GLib.source_remove(this._watchdogId);
-            this._watchdogId = null;
-        }
-        if (this._settings) {
-            this._settings.disconnectObject(this);
-        }
-        if (this._indicator) {
-            this._removeFromPanel();
-            this._indicator.destroy();
-            this._indicator = null;
-        }
-        if (this._httpSession) {
-            this._httpSession.abort();
-            this._httpSession = null;
-            this._httpSessionGen++;
-            this._inFlight = false;
-        }
+        this._accounts = null;
         this._settings = null;
     }
 }

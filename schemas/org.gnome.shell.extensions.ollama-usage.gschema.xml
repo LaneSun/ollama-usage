@@ -3,7 +3,7 @@
   <schema id="org.gnome.shell.extensions.ollama-usage"
           path="/org/gnome/shell/extensions/ollama-usage/">
 
-    <!-- Outer Ring: Weekly Usage -->
+    <!-- Outer Ring: Session Usage -->
     <key name="ring-color" type="s">
       <default>"#ffffffff"</default>
       <summary>Ring Color</summary>
@@ -21,7 +21,7 @@
       <summary>Ring Gap</summary>
     </key>
 
-    <!-- Inner Circle: 5h Usage -->
+    <!-- Inner Circle: Weekly Usage / Monthly Credits -->
     <key name="circle-color" type="s">
       <default>"#ffffffff"</default>
       <summary>Circle Color</summary>
@@ -84,6 +84,16 @@
     <key name="ollama-cookie" type="s">
       <default>""</default>
       <summary>Ollama Cookie</summary>
+    </key>
+
+    <key name="account-name" type="s">
+      <default>""</default>
+      <summary>Primary account display name</summary>
+    </key>
+
+    <key name="accounts" type="a(sss)">
+      <default>[]</default>
+      <summary>Additional accounts (stable ID, display name, session cookie)</summary>
     </key>
 
   </schema>

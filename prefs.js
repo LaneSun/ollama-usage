@@ -1,9 +1,10 @@
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';
-import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 
 import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {additionalAccounts, normalizeCookie} from './accounts.js';
 
 function rgbaToHex(rgba) {
     const r = Math.round(rgba.red * 255).toString(16).padStart(2, '0');
@@ -19,14 +20,13 @@ function hexToRGBA(hex) {
     return rgba;
 }
 
-const ALL_KEYS = [
+const RESET_KEYS = [
     'ring-color', 'ring-thickness', 'ring-gap',
     'circle-color', 'circle-radius',
     'hand-color', 'hand-length', 'hand-thickness',
     'hand-outline-color', 'hand-outline-width',
     'panel-position', 'panel-index',
     'update-interval',
-    'ollama-cookie',
 ];
 
 export default class OllamaCloudPreferences extends ExtensionPreferences {
@@ -41,10 +41,36 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
         });
 
         const cloudGroup = new Adw.PreferencesGroup({
-            title: _('Ollama Cloud'),
+            title: _('Primary account'),
+            description: _('Each account has its own panel meter. Cookies are stored in your user settings.'),
         });
-        cloudGroup.add(this._createCookieRow(settings, 'ollama-cookie', _('__Secure-session')));
+        const nameRow = new Adw.EntryRow({title: _('Account name'), show_apply_button: true});
+        nameRow.text = settings.get_string('account-name');
+        nameRow.connect('apply', () => settings.set_string('account-name', nameRow.text.trim()));
+        cloudGroup.add(nameRow);
+        cloudGroup.add(this._createCookieRow(settings.get_string('ollama-cookie'), cookie => {
+            settings.set_string('ollama-cookie', cookie);
+        }));
         page.add(cloudGroup);
+
+        this._accountsGroup = new Adw.PreferencesGroup({title: _('Additional accounts')});
+        this._accountRows = new Map();
+        const addButton = new Gtk.Button({label: _('Add Account'), valign: Gtk.Align.CENTER});
+        addButton.connect('clicked', () => {
+            const entries = this._accountEntries();
+            const id = GLib.uuid_string_random();
+            entries.push([id, _('Account %d').format(entries.length + 2), '']);
+            this._saveAccounts(entries);
+            this._accountRows.get(id).expanded = true;
+        });
+        this._accountsGroup.header_suffix = addButton;
+        this._rebuildAccountRows();
+        const accountsChanged = settings.connect('changed::accounts', () => this._rebuildAccountRows());
+        window.connect('close-request', () => {
+            settings.disconnect(accountsChanged);
+            return false;
+        });
+        page.add(this._accountsGroup);
 
         const ringGroup = new Adw.PreferencesGroup({
             title: _('Outer Ring (Session Usage)'),
@@ -55,7 +81,7 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
         page.add(ringGroup);
 
         const circleGroup = new Adw.PreferencesGroup({
-            title: _('Inner Circle (Weekly Usage)'),
+            title: _('Inner Circle (Weekly Usage / Monthly Credits)'),
         });
         circleGroup.add(this._createColorRow(settings, 'circle-color', _('Circle Color')));
         circleGroup.add(this._createSpinRow(settings, 'circle-radius', _('Circle Radius'), 2.0, 28.0, 0.5, 'double'));
@@ -87,7 +113,7 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
 
         const resetGroup = new Adw.PreferencesGroup();
         const resetRow = new Adw.ButtonRow({
-            title: _('Reset to Defaults'),
+            title: _('Reset Appearance and Refresh Settings'),
         });
         resetRow.add_css_class('destructive-action');
         resetRow.connect('activated', () => {
@@ -100,7 +126,7 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
     }
 
     _resetToDefaults() {
-        for (const key of ALL_KEYS) {
+        for (const key of RESET_KEYS) {
             this._settings.reset(key);
         }
         for (const handler of this._syncHandlers) {
@@ -108,21 +134,71 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
         }
     }
 
-    _createCookieRow(settings, key, title) {
-        const row = new Adw.EntryRow({
-            title: title,
+    _createCookieRow(value, onApply) {
+        const row = new Adw.PasswordEntryRow({
+            title: _('__Secure-session'),
             show_apply_button: true,
+            text: value,
         });
-
-        const sync = () => { row.text = settings.get_string(key); };
-        sync();
 
         row.connect('apply', () => {
-            settings.set_string(key, row.text);
+            const cookie = normalizeCookie(row.text);
+            if (row.text.trim() && !cookie) {
+                row.add_css_class('error');
+                return;
+            }
+            row.remove_css_class('error');
+            onApply(cookie);
         });
-
-        this._syncHandlers.push({ refresh: sync });
         return row;
+    }
+
+    _accountEntries() {
+        return additionalAccounts(this._settings.get_value('accounts').deep_unpack())
+            .map(({id, name, cookie}) => [id, name, cookie]);
+    }
+
+    _saveAccounts(entries) {
+        this._settings.set_value('accounts', new GLib.Variant('a(sss)', entries));
+    }
+
+    _updateAccount(id, field, value) {
+        const entries = this._accountEntries();
+        const entry = entries.find(account => account[0] === id);
+        if (entry) {
+            entry[field] = value;
+            this._saveAccounts(entries);
+        }
+    }
+
+    _rebuildAccountRows() {
+        const expanded = new Set([...this._accountRows].filter(([, row]) => row.expanded).map(([id]) => id));
+        for (const row of this._accountRows.values())
+            this._accountsGroup.remove(row);
+        this._accountRows.clear();
+        this._accountEntries().forEach(([id, name, cookie], index) => {
+            const row = new Adw.ExpanderRow({
+                title: name || _('Account %d').format(index + 2),
+                use_markup: false,
+                expanded: expanded.has(id),
+            });
+            const nameRow = new Adw.EntryRow({title: _('Account name'), show_apply_button: true, text: name});
+            nameRow.connect('apply', () => {
+                this._updateAccount(id, 1, nameRow.text.trim());
+            });
+            row.add_row(nameRow);
+            row.add_row(this._createCookieRow(cookie, value => this._updateAccount(id, 2, value)));
+            const remove = new Gtk.Button({
+                icon_name: 'user-trash-symbolic',
+                tooltip_text: _('Remove Account'),
+                valign: Gtk.Align.CENTER,
+            });
+            remove.add_css_class('flat');
+            remove.connect('clicked', () => this._saveAccounts(this._accountEntries().filter(account => account[0] !== id)));
+            row.add_suffix(remove);
+            this._accountsGroup.add(row);
+            this._accountRows.set(id, row);
+        });
     }
 
     _createColorRow(settings, key, title) {

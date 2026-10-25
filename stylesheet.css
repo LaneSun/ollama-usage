@@ -1,24 +1,19 @@
 .ollama-cloud-indicator {
-    padding: 0 6px;
+    spacing: 4px;
 }
 
-.ollama-cloud-indicator > St.DrawingArea {
-    x-align: center;
-    y-align: center;
-}
-
-.popup-sub-menu .ollama-cloud-chart-title {
+.ollama-cloud-chart-title {
     font-weight: bold;
     padding: 3px 16px;
 }
 
-.popup-sub-menu .ollama-cloud-chart-empty {
+.ollama-cloud-chart-empty {
     font-style: italic;
     color: rgba(255, 255, 255, 0.5);
     padding: 3px 16px;
 }
 
-.popup-sub-menu .ollama-cloud-chart-grid {
+.ollama-cloud-chart-grid {
     padding: 3px 16px;
 }
 

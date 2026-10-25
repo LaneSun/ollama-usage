@@ -1,108 +1,88 @@
 # Ollama Cloud Indicator
 
-A GNOME Shell extension that displays your [Ollama Cloud](https://ollama.com) subscription usage as a compact circular indicator in the top panel.
+A GNOME Shell extension that displays [Ollama Cloud](https://ollama.com) usage in the top panel. Supports multiple accounts, [monthly credit plans](https://ollama.com/blog/transparent-pricing), and legacy subscriptions on GNOME Shell 47–50.
 
-Ollama now bills most accounts through [credit-based pricing](https://ollama.com/blog/transparent-pricing); the extension supports that model as well as the older percentage-based subscriptions, auto-detected from your account.
+## Usage display
 
-## Credit-based plans
+For **monthly credit plans**, the circle shows the fraction of included credits consumed. The popup shows used and remaining included credits, the plan name, and the next refill date when available. These plans have no session ring or clock hand.
 
 ![Credit plan popup](screenshot-credits.png)
 
-This is what most accounts see today. The panel icon is a single circle, filled according to the fraction of your monthly credits consumed — there's no outer ring or clock hand, since credit plans don't have a 5-hour session window to show.
-
-| Element | Meaning |
-|---------|---------|
-| Circle fill | Monthly credits used, as a fraction of your plan's total |
-| `Used: $2.33 / $60.00 (Pro)` | Credits consumed this month / plan total, and plan name |
-| `Remaining: $57.67 (refills in 28d 13h)` | Credits left and countdown to the next monthly refill |
-| `Calls per 1% usage` chart | Models ranked by number of calls per 1% of monthly credits they consumed |
-
-## Legacy subscriptions (percentage-based)
+For **legacy subscriptions**, the outer ring shows session usage, the inner circle shows weekly usage, and the clock hand shows progress through the five-hour session. The popup includes percentages and reset countdowns.
 
 ![Legacy plan popup](screenshot.png)
 
-| Element | Meaning |
-|---------|---------|
-| Outer ring | Session usage (5-hour rolling window) |
-| Inner circle | Weekly usage |
-| Clock hand | Rotates around the ring, showing how far through the current 5-hour session you are (top = just reset, full turn = next reset) |
-| `Weekly: 95% (0d 21h)` | Weekly quota used, with time to reset |
-| `Session: 40% (2h 15m)` | 5-hour session quota used, with time to reset |
-| `Calls per 1% usage` chart | Models ranked by number of calls per 1% of weekly usage they consumed |
-
-## Features
-
-Both pricing models share:
-- **Manual refresh button**
-- **Auto Refresh** — Fetches data every 60 seconds (configurable)
-- **Retry on Failure** — If the initial fetch fails, retries 3 times with 1s / 2s / 4s backoff
+Both formats include a model chart ranked by calls per 1% of usage. The chart is based on the model breakdown reported by Ollama, not a prediction of future cost.
 
 ## Installation
 
+From source, with GNU Make, GLib development tools and gettext installed:
+
 ```bash
-make all
-cp -r . ~/.local/share/gnome-shell/extensions/ollama-usage@lanesun.anlbrain.com/
-glib-compile-schemas ~/.local/share/gnome-shell/extensions/ollama-usage@lanesun.anlbrain.com/schemas/
+make install
 ```
 
-Restart GNOME Shell (log out and back in on Wayland), then enable the extension:
+This installs runtime files, compiled schemas and translations under `${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/ollama-usage@lanesun.anlbrain.com/`.
+
+Alternatively, build and install a ZIP:
+
+```bash
+./package.sh
+gnome-extensions install --force ollama-usage.zip
+```
+
+Log out and back in on Wayland, then enable the extension:
 
 ```bash
 gnome-extensions enable ollama-usage@lanesun.anlbrain.com
 ```
 
-## Cookie Setup
+The same `ollama-usage.zip` can be uploaded to GNOME Extensions. Packaging rebuilds translations and includes all runtime modules and the stylesheet; it excludes credentials, tests, repository metadata and compiled schemas. GNOME compiles the schema during installation.
 
-The extension fetches usage data from `https://ollama.com/settings`, which requires authentication. You need to provide your `__Secure-session` cookie value.
+## Accounts and cookies
 
-### How to get the cookie
+1. Sign in to [Ollama settings](https://ollama.com/settings) in your browser.
+2. Open developer tools, then **Application / Storage → Cookies → https://ollama.com**.
+3. Copy the value of `__Secure-session`.
+4. Open **Preferences** from the indicator menu, or run:
 
-1. Log in to [ollama.com](https://ollama.com) in your browser
-2. Navigate to **Settings** (`https://ollama.com/settings`)
-3. Open browser DevTools (**F12** or **Ctrl+Shift+I**)
-4. Go to **Application** → **Cookies** → `https://ollama.com`
-5. Find the cookie named `__Secure-session`
-6. Copy its **value** (the long string, not the name)
+   ```bash
+   gnome-extensions prefs ollama-usage@lanesun.anlbrain.com
+   ```
 
-### Configure the extension
+5. Paste the value into the primary account's `__Secure-session` field and click its apply button. Fetching starts immediately.
 
-1. Open the extension settings (via **Extensions** app or `gnome-extensions prefs ollama-usage@lanesun.anlbrain.com`)
-2. Under **Ollama Cloud**, paste the cookie value into the `__Secure-session` field
-3. The indicator will fetch data immediately on next enable, and refresh every 60 seconds
+To display another account, click **Add Account**, give it a name, and apply its own session cookie. Use a separate browser profile or sign into that account to obtain the correct cookie. Each account has an independent meter, refresh action, cache and error status. Names appear beside the meters when multiple accounts are configured. Additional accounts can be removed with the trash button.
 
-> **Note:** Only paste the cookie **value** — do not include the cookie name or surrounding quotes. The extension wraps it automatically.
+Existing installations keep their original cookie as the primary account. Account names and cookies survive **Reset Appearance and Refresh Settings**. Cookie fields are hidden by default; their values are stored in your user GSettings, so treat your settings backups as sensitive.
 
-## Customization
+## Appearance and refresh
 
-All visual parameters are configurable in the settings:
+Preferences provide ring, circle and hand colors and dimensions, panel position and index, and a refresh interval from 5 to 3,600 seconds (default: 60). Appearance settings apply to all accounts.
 
-| Setting | Description |
-|---------|-------------|
-| Ring Color / Thickness / Gap | Outer ring appearance (session usage, legacy plans only) |
-| Circle Color / Radius | Inner circle appearance (weekly usage, or monthly credits used) |
-| Hand Color / Length / Thickness | Clock hand appearance (legacy plans only) |
-| Hand Outline Color / Width | Hand border for visibility (legacy plans only) |
-| Panel Position | Left / Center / Right |
-| Position Index | Sort order within the panel |
-| Update Interval | Auto-refresh interval in seconds (default: 60) |
+Each account requests `https://ollama.com/settings`. Transient network and HTTP failures retry three times with 1 / 2 / 4 second backoff. A stalled request is cancelled after 35 seconds. Polling does not interrupt an active request. Authentication redirects stop with a cookie error.
 
-## Data Source
+After a failed refresh, the last successful reading stays visible but is dimmed and explicitly marked stale. Changing a cookie clears the old reading. An empty or unrecognized page never appears as a successful 0% reading; genuine 0% usage is accepted.
 
-The extension sends an authenticated GET request to `https://ollama.com/settings` and parses the HTML. It tries the new credit-based format first, then falls back to the legacy percentage format if the credit markers aren't found.
+Usage is parsed from Ollama's settings HTML, so website changes may require parser updates. Credit amounts refer to the monthly included pool; separately purchased balances are not inferred from that meter.
 
-### New credit-based plans
-- The plan badge next to the "Usage credits" heading (e.g. `pro`)
-- `aria-label="Monthly credits used: $X.XX of $Y.YY"` on the usage bar — the single source for both used and total credits
-- `Refills to $Y.YY on <date>` from the balance tooltip — used for the refill countdown
-- `data-model="..." data-requests="..."` segments inside the same usage bar — model breakdown
+## Development
 
-### Legacy percentage-based plans
-- `Session usage X% used` — session (5h) percentage
-- `Weekly usage X% used` — weekly percentage
-- `data-time="..."` — session reset timestamp (used for clock hand position)
-- `data-model="..." data-requests="..."` segments in the weekly usage bar — model breakdown
+The extension has no npm dependencies. `make test` requires Node.js 22 or newer, GJS, libsoup 3, GLib tools and gettext.
 
-If the fetch fails or returns no usage data, all indicators show 0% and the popup menu displays "Fetch failed — check cookie".
+```bash
+make test
+./package.sh
+python3 tests/package.test.py
+```
+
+- `usage.js`: parsing and data validation for both pricing formats.
+- `accounts.js`: account records and cookie normalization.
+- `client.js`: per-account HTTP requests, cache and retry lifecycle.
+- `extension.js`: panel drawing, menus and account orchestration.
+- `prefs.js`: account management and appearance settings.
+
+Tests use synthetic HTML and a local HTTP server, with no real credentials or requests to Ollama. GitHub Actions runs the same parser, account, request-lifecycle and archive checks.
 
 ## License
 
