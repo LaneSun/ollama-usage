@@ -1,6 +1,6 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import Soup from 'gi://Soup?version=3.0';
+import Soup from 'gi://Soup';
 
 import {normalizeCookie} from './accounts.js';
 import {parseUsage} from './usage.js';
@@ -37,6 +37,11 @@ export class UsageClient {
             return;
         }
 
+        const previous = this._request;
+        if (previous) {
+            this._finish(previous);
+            previous.cancellable.cancel();
+        }
         const request = {cancellable: new Gio.Cancellable(), watchdog: null};
         this._request = request;
         try {
@@ -106,7 +111,10 @@ export class UsageClient {
     }
 
     _failed(error, retries) {
-        this._publish(null, error);
+        if (this._retryId !== null) {
+            GLib.source_remove(this._retryId);
+            this._retryId = null;
+        }
         if (retries > 0 && !this._destroyed) {
             this._retryId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2 ** (3 - retries), () => {
                 this._retryId = null;
@@ -114,11 +122,10 @@ export class UsageClient {
                 return GLib.SOURCE_REMOVE;
             });
         }
+        this._publish(null, error);
     }
 
     destroy() {
-        if (this._destroyed)
-            return;
         this._destroyed = true;
         if (this._retryId !== null) {
             GLib.source_remove(this._retryId);
@@ -127,11 +134,13 @@ export class UsageClient {
         const request = this._request;
         this._request = null;
         if (request) {
-            if (request.watchdog !== null)
+            if (request.watchdog !== null) {
                 GLib.source_remove(request.watchdog);
+                request.watchdog = null;
+            }
             request.cancellable.cancel();
         }
-        this._session.abort();
+        this._session?.abort();
         this._session = null;
         this._onUpdate = null;
     }
