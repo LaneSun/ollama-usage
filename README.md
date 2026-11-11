@@ -8,7 +8,7 @@ For **monthly credit plans**, the circle shows the fraction of included credits 
 
 ![Credit plan popup](screenshot.png)
 
-The model chart lists the seven-day cost per model in USD and the number of requests, both taken from Ollama's own usage JSON. Up to ten models are shown, ranked by cost.
+The model chart lists the seven-day cost per model in USD and the number of requests, both taken from Ollama's own usage JSON. Models are ranked by cost.
 
 For **legacy subscriptions**, the outer ring shows session usage, the inner circle shows weekly usage, and the clock hand shows progress through the five-hour session. The popup includes percentages and reset countdowns.
 
@@ -60,7 +60,7 @@ The key lives in the system keyring (libsecret), never in GSettings. To display 
 
 Preferences provide ring, circle and hand colors and dimensions, panel position and index, and a refresh interval from 5 to 3,600 seconds (default: 60). Appearance settings apply to all accounts.
 
-Each account requests `https://ollama.com/api/balance` and `https://ollama.com/api/usage` (7 days, grouped by model). Ollama limits the API to 10 requests per minute per user, shared across devices. Transient network and HTTP failures retry three times with 1 / 2 / 4 second backoff. A stalled request is cancelled after 35 seconds. Polling does not interrupt an active request. Rejected keys (401/403) stop with a key error.
+Each account requests `https://ollama.com/api/balance` and `https://ollama.com/api/usage` (7 days, grouped by model). Ollama limits the API to 10 requests per minute per user, shared across devices. Transient network and HTTP failures retry three times with 1 / 2 / 4 second backoff. A stalled balance request is cancelled after 35 seconds. The per-model breakdown is best effort: if it fails, the rest of the reading still appears. Polling does not interrupt an active request. Rejected keys (401/403) stop with a key error.
 
 After a failed refresh, the last successful reading stays visible but is dimmed and explicitly marked stale. Changing a key clears the old reading. An unrecognized response never appears as a successful 0% reading.
 
@@ -76,7 +76,7 @@ make test
 python3 tests/package.test.py
 ```
 
-- `usage.js`: meter helpers (fraction clamping and the empty payload).
+- `usage.js`: meter helpers (fraction clamping and the empty payload); its old HTML parser is kept only for the legacy tests.
 - `accounts.js`: account records.
 - `api.js`: parsers for the Ollama balance and usage JSON.
 - `keyring.js`: API key storage in the system keyring.
