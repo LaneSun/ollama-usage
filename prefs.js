@@ -136,13 +136,12 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
     _createKeyRow(account) {
         const row = new Adw.PasswordEntryRow({title: _('ollama.com API key'), show_apply_button: true});
         row.connect('apply', () => {
-            try {
-                storeKey(account, row.text.trim());
-                this._settings.set_int('key-revision', this._settings.get_int('key-revision') + 1);
-                row.remove_css_class('error');
-            } catch {
-                row.add_css_class('error');
-            }
+            row.remove_css_class('error');
+            row.set_sensitive(false);
+            storeKey(account, row.text.trim())
+                .then(() => this._settings.set_int('key-revision', this._settings.get_int('key-revision') + 1))
+                .catch(() => row.add_css_class('error'))
+                .finally(() => row.set_sensitive(true));
         });
         return row;
     }

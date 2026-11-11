@@ -458,16 +458,21 @@ export default class OllamaCloudExtension extends Extension {
         this._syncAccounts();
     }
 
-    _syncAccounts() {
+    async _syncAccounts() {
         const definitions = [
             {
                 id: PRIMARY_ACCOUNT,
                 name: this._settings.get_string('account-name').trim() || _('Primary account'),
-                key: lookupKey(PRIMARY_ACCOUNT),
             },
             ...additionalAccounts(this._settings.get_value('accounts').deep_unpack())
-                .map((account, index) => ({...account, key: lookupKey(account.id), name: account.name || _('Account %d').format(index + 2)})),
+                .map((account, index) => ({id: account.id, name: account.name || _('Account %d').format(index + 2)})),
         ];
+        const keys = await Promise.all(definitions.map(definition => lookupKey(definition.id)));
+        if (!this._accounts)
+            return;
+        definitions.forEach((definition, index) => {
+            definition.key = keys[index];
+        });
         // Preserve caches on layout edits; replace clients on credential edits.
         for (const account of this._accounts.values()) {
             account.indicator?.destroy();

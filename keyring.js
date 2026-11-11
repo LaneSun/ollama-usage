@@ -7,17 +7,35 @@ const SCHEMA = Secret.Schema.new(
     {account: Secret.SchemaAttributeType.STRING}
 );
 
+// The sync API blocks the main loop and deadlocks on the unlock prompt.
 export function lookupKey(account) {
-    try {
-        return Secret.password_lookup_sync(SCHEMA, {account}, null) ?? '';
-    } catch {
-        return '';
-    }
+    return new Promise(resolve => {
+        Secret.password_lookup(SCHEMA, {account}, null, (source, result) => {
+            try {
+                resolve(Secret.password_lookup_finish(result) ?? '');
+            } catch {
+                resolve('');
+            }
+        });
+    });
 }
 
 export function storeKey(account, key) {
-    if (!key)
-        return Secret.password_clear_sync(SCHEMA, {account}, null);
-    return Secret.password_store_sync(
-        SCHEMA, {account}, Secret.COLLECTION_DEFAULT, "ollama.com API key", key, null);
+    return new Promise((resolve, reject) => {
+        const done = (source, result) => {
+            try {
+                if (key)
+                    Secret.password_store_finish(result);
+                else
+                    Secret.password_clear_finish(result);
+                resolve();
+            } catch (error) {
+                reject(error);
+            }
+        };
+        if (key)
+            Secret.password_store(SCHEMA, {account}, Secret.COLLECTION_DEFAULT, 'ollama.com API key', key, null, done);
+        else
+            Secret.password_clear(SCHEMA, {account}, null, done);
+    });
 }
