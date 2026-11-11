@@ -7,7 +7,7 @@ from pathlib import Path
 
 with zipfile.ZipFile('ollama-usage.zip') as archive, tempfile.TemporaryDirectory() as directory:
     names = set(archive.namelist())
-    required = {'extension.js', 'prefs.js', 'usage.js', 'client.js', 'accounts.js', 'stylesheet.css', 'metadata.json'}
+    required = {'extension.js', 'prefs.js', 'usage.js', 'client.js', 'api.js', 'keyring.js', 'accounts.js', 'stylesheet.css', 'metadata.json'}
     assert required <= names, f'Missing runtime files: {required - names}'
     assert not any(name.startswith(('.git/', '.jj/', 'tests/')) or 'cookie.txt' in name for name in names)
     metadata = json.loads(archive.read('metadata.json'))

@@ -17,6 +17,8 @@ FILES=(
     "prefs.js"
     "accounts.js"
     "client.js"
+    "api.js"
+    "keyring.js"
     "usage.js"
     "stylesheet.css"
     "LICENSE"

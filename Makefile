@@ -3,7 +3,7 @@ DOMAIN = $(UUID)
 SCHEMA_ID = org.gnome.shell.extensions.ollama-usage
 DATA_DIR = $(if $(XDG_DATA_HOME),$(XDG_DATA_HOME),$(HOME)/.local/share)
 EXTENSION_DIR ?= $(DATA_DIR)/gnome-shell/extensions/$(UUID)
-SOURCES = extension.js prefs.js usage.js client.js accounts.js metadata.json stylesheet.css LICENSE
+SOURCES = extension.js prefs.js usage.js client.js api.js keyring.js accounts.js metadata.json stylesheet.css LICENSE
 
 .PHONY: all schemas translations install install-schema clean pot test package
 
