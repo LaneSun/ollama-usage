@@ -1,5 +1,5 @@
 // Exercise real libsoup requests and GLib timers against an isolated server.
-// All cookie values below are synthetic. No Ollama account is contacted.
+// All API keys below are synthetic. No Ollama account is contacted.
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup?version=3.0';
 import System from 'system';
@@ -26,17 +26,15 @@ async function until(predicate, message, timeout = 7000) {
     }
 }
 
-const legacy = '<div aria-label="Weekly usage 25% used"></div>';
-const credits = '<div aria-label="Monthly credits used: $2.33 of $60"></div>';
+const legacy = '{"included":{"session":{"remaining_percent":75,"resets_at":"2026-11-11T15:00:00Z"},"weekly":{"remaining_percent":75,"resets_at":"2026-11-15T00:00:00Z"}},"purchased":{"balance_usd":0}}';
+const credits = '{"included":{"balance_usd":57.67,"allowance_usd":60,"period":{"until":"2026-12-01T00:00:00Z"}},"purchased":{"balance_usd":0}}';
 const server = new Soup.Server();
 const requests = new Map();
 const clients = [];
 let failA = false;
 let redirected = false;
-let userAgent;
 server.add_handler(null, (_server, message, path) => {
-    const cookie = message.get_request_headers().get_one('Cookie');
-    userAgent = message.get_request_headers().get_one('User-Agent');
+    const cookie = (message.get_request_headers().get_one('Authorization') ?? '').replace('Bearer ', '');
     const key = `${path}:${cookie}`;
     requests.set(key, (requests.get(key) ?? 0) + 1);
     if (path === '/redirect-target')
@@ -55,8 +53,8 @@ server.add_handler(null, (_server, message, path) => {
         message.pause();
         return;
     }
-    message.set_status(failA && cookie === '__Secure-session=a' ? 503 : 200, null);
-    message.set_response('text/html', Soup.MemoryUse.COPY, cookie === '__Secure-session=b' ? credits : legacy);
+    message.set_status(failA && cookie === 'a' ? 503 : 200, null);
+    message.set_response('application/json', Soup.MemoryUse.COPY, cookie === 'b' ? credits : legacy);
     if (path === '/slow') {
         message.pause();
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
@@ -83,8 +81,8 @@ async function run() {
     await until(() => a.updates.length && b.updates.length, 'two independent accounts');
     assert(a.instance.data.weekly === 0.25 && a.instance.data.hasSession, 'legacy account data');
     assert(b.instance.data.creditsUsed === 2.33 && !b.instance.data.hasSession, 'credit account data');
-    assert(userAgent === 'Mozilla/5.0', 'preserve the existing settings-page user agent');
-    print('PASS: independent cookies, caches and pricing formats');
+    assert(requests.get('/settings:a') === 1 && requests.get('/settings:b') === 1, 'each account sends its own bearer token');
+    print('PASS: independent keys, caches and pricing formats');
 
     failA = true;
     a.instance.refresh();
@@ -95,7 +93,7 @@ async function run() {
     a.instance.destroy();
     clients.splice(clients.indexOf(a.instance), 1);
     await sleep(2200);
-    assert(requests.get('/settings:__Secure-session=a') === 2, 'destroy must cancel pending retries');
+    assert(requests.get('/settings:a') === 2, 'destroy must cancel pending retries');
     print('PASS: HTTP errors retain visibly stale data; disposal cancels retries');
 
     const auth = client('auth', '/auth');
@@ -107,18 +105,18 @@ async function run() {
     await until(() => auth.updates.length && format.updates.length, 'auth and page errors');
     assert(auth.instance.error === 'auth' && !redirected, 'credentials must not follow redirects');
     assert(format.instance.error === 'format', 'login HTML is not valid usage');
-    assert(missing.instance.error === 'cookie', 'missing cookie is actionable');
-    assert(!requests.has('/settings:null'), 'missing cookie must not make a request');
-    print('PASS: redirect, invalid-page and missing-cookie handling');
+    assert(missing.instance.error === 'key', 'missing key is actionable');
+    assert(!requests.has('/settings:'), 'missing key must not make a request');
+    print('PASS: redirect, invalid-payload and missing-key handling');
 
     const slow = client('slow', '/slow');
     slow.instance.refresh();
     slow.instance.refresh();
     await until(() => slow.updates.length, 'slow request');
-    assert(requests.get('/slow:__Secure-session=slow') === 1, 'overlapping refresh must coalesce');
+    assert(requests.get('/slow:slow') === 1, 'overlapping refresh must coalesce');
     const removed = client('removed', '/slow');
     removed.instance.refresh();
-    await until(() => requests.has('/slow:__Secure-session=removed'), 'request before removing account');
+    await until(() => requests.has('/slow:removed'), 'request before removing account');
     removed.instance.destroy();
     clients.splice(clients.indexOf(removed.instance), 1);
     await sleep(500);
@@ -130,7 +128,7 @@ async function run() {
     await until(() => watchdog.instance.data !== null, 'watchdog recovery');
     assert(watchdog.updates.length === 2 && watchdog.updates[0].error === 'network' && watchdog.instance.error === null,
         'watchdog failure must retry once and publish a fresh success');
-    assert(requests.get('/watchdog:__Secure-session=watchdog') === 2, 'cancelled callbacks must not spawn duplicate retries');
+    assert(requests.get('/watchdog:watchdog') === 2, 'cancelled callbacks must not spawn duplicate retries');
     print('PASS: watchdog cancellation and recovery without duplicate requests');
 }
 

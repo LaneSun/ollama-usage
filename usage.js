@@ -101,17 +101,7 @@ export function parseUsage(html) {
         data.weekly = total > 0 ? used / total : 0;
         data.hasSession = false;
         data.found = true;
-        const plan = html.match(/Usage credits\s*<span[^>]*>\s*([^<]+?)\s*<\/span>/i);
-        if (plan) {
-            const name = decodeEntities(plan[1]).trim();
-            data.planType = name.charAt(0).toUpperCase() + name.slice(1);
-        }
-        const refill = html.match(/Refills to \$[\d,.]+ on ([A-Za-z]+ \d{1,2},?\s*\d{4})/i);
-        if (refill) {
-            const ts = Date.parse(refill[1]) / 1000;
-            if (Number.isFinite(ts))
-                data.weeklyResetTs = ts;
-        }
+        addPlanAndRefill(html, data);
         data.models = segments(blockFor(meter));
         return data;
     }
@@ -134,5 +124,45 @@ export function parseUsage(html) {
             data.models = segments(block);
         }
     }
+    return data.found ? data : parseDashboard(html, data);
+}
+
+function addPlanAndRefill(html, data) {
+    const plan = html.match(/Usage credits\s*<span[^>]*>\s*([^<]+?)\s*<\/span>/i);
+    if (plan) {
+        const name = decodeEntities(plan[1]).trim();
+        data.planType = name.charAt(0).toUpperCase() + name.slice(1);
+    }
+    const refill = html.match(/Refills to \$[\d,.]+ on ([A-Za-z]+ \d{1,2},?\s*\d{4})/i);
+    if (refill) {
+        const ts = Date.parse(refill[1]) / 1000;
+        if (Number.isFinite(ts))
+            data.weeklyResetTs = ts;
+    }
+}
+
+// Dashboard (Nov 2026): shows the remaining balance and the cap, not the spend.
+function parseDashboard(html, data) {
+    const text = decodeEntities(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
+    const left = text.match(new RegExp(`Monthly credits \\$(${NUMBER})`));
+    const cap = text.match(new RegExp(`Refills to \\$(${NUMBER}) on`));
+    if (!left || !cap)
+        return data;
+    data.creditsTotal = Number(cap[1].replace(/,/g, ''));
+    data.creditsUsed = Math.max(0, Math.round((data.creditsTotal - Number(left[1].replace(/,/g, ''))) * 100) / 100);
+    data.weekly = data.creditsTotal > 0 ? data.creditsUsed / data.creditsTotal : 0;
+    data.hasSession = false;
+    data.found = true;
+    addPlanAndRefill(html, data);
     return data;
+}
+
+// Report table rows: model, requests, ..., cost. The cost share drives the chart.
+export function parseModels(html) {
+    const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map(row =>
+        [...row[1].matchAll(/<td[^>]*>([^<]*)<\/td>/gi)].map(cell => decodeEntities(cell[1]).trim()));
+    const models = rows.filter(cells => cells.length > 2 && /^[\d,]+$/.test(cells[1])).map(cells =>
+        ({name: cells[0], requests: Number(cells[1].replace(/,/g, '')), cost: Number(cells.at(-1).replace(/[^\d.]/g, '')) || 0}));
+    const total = models.reduce((sum, model) => sum + model.cost, 0);
+    return models.map(({name, requests, cost}) => ({name, requests, widthPct: total ? cost / total * 100 : 0}));
 }

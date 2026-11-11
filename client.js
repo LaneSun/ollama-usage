@@ -2,15 +2,16 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
-import {normalizeCookie} from './accounts.js';
-import {parseUsage} from './usage.js';
+import {parseBalance, parseUsage} from './api.js';
 
-const SETTINGS_URL = 'https://ollama.com/settings';
+const BALANCE_URL = 'https://ollama.com/api/balance';
+const USAGE_URL = 'https://ollama.com/api/usage?range=7d&group_by=model';
 
 // One instance owns one account's connection, cache, requests and timers.
 export class UsageClient {
-    constructor(cookie, onUpdate, {url = SETTINGS_URL, watchdogSeconds = 35} = {}) {
-        this._cookie = normalizeCookie(cookie);
+    constructor(key, onUpdate, {url = BALANCE_URL, watchdogSeconds = 35, reportUrl = url === BALANCE_URL ? USAGE_URL : null} = {}) {
+        this._reportUrl = reportUrl;
+        this._key = (key ?? '').trim();
         this._onUpdate = onUpdate;
         this._url = url;
         this._watchdogSeconds = watchdogSeconds;
@@ -19,7 +20,7 @@ export class UsageClient {
         this._retryId = null;
         this._destroyed = false;
         this.data = null;
-        this.error = this._cookie ? null : 'cookie';
+        this.error = this._key ? null : 'key';
     }
 
     refresh() {
@@ -32,8 +33,8 @@ export class UsageClient {
     _fetch(retries) {
         if (this._destroyed)
             return;
-        if (!this._cookie) {
-            this._publish(null, 'cookie');
+        if (!this._key) {
+            this._publish(null, 'key');
             return;
         }
 
@@ -48,8 +49,7 @@ export class UsageClient {
             const message = Soup.Message.new('GET', this._url);
             // Never forward credentials to a redirect destination.
             message.flags |= Soup.MessageFlags.NO_REDIRECT;
-            message.request_headers.append('Cookie', `__Secure-session=${this._cookie}`);
-            message.request_headers.append('User-Agent', 'Mozilla/5.0');
+            message.request_headers.append('Authorization', `Bearer ${this._key}`);
             request.watchdog = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this._watchdogSeconds, () => {
                 request.watchdog = null;
                 if (this._request !== request || this._destroyed)
@@ -73,14 +73,24 @@ export class UsageClient {
                 if (!this._finish(request))
                     return;
                 const status = message.get_status();
-                if ((status >= 300 && status < 400) || status === 401 || status === 403) {
+                if (status === 429) {
+                    this._failed('network', 0);
+                } else if ((status >= 300 && status < 400) || status === 401 || status === 403) {
                     this._failed('auth', 0);
                 } else if (status < 200 || status >= 300) {
                     this._failed('network', retries);
                 } else {
-                    const data = parseUsage(new TextDecoder().decode(bytes.get_data()));
-                    if (data.found)
+                    let data = null;
+                    try {
+                        data = parseBalance(JSON.parse(new TextDecoder().decode(bytes.get_data())));
+                    } catch {
+                        // Handled as a format error below.
+                    }
+                    if (data) {
+                        data.models = this.data?.models ?? [];
                         this._publish(data, null);
+                        this._fetchModels(data);
+                    }
                     else
                         this._failed('format', 0);
                 }
@@ -89,6 +99,26 @@ export class UsageClient {
             if (this._finish(request))
                 this._failed('network', retries);
         }
+    }
+
+    // Best effort: the per-model breakdown is optional, so failures are ignored.
+    _fetchModels(data) {
+        if (!this._reportUrl || this._destroyed)
+            return;
+        const message = Soup.Message.new('GET', this._reportUrl);
+        message.flags |= Soup.MessageFlags.NO_REDIRECT;
+        message.request_headers.append('Authorization', `Bearer ${this._key}`);
+        this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (session, result) => {
+            try {
+                const bytes = session.send_and_read_finish(result);
+                if (this._destroyed || message.get_status() !== 200 || this.data !== data)
+                    return;
+                Object.assign(data, parseUsage(JSON.parse(new TextDecoder().decode(bytes.get_data()))));
+                this._onUpdate(this.data, this.error);
+            } catch {
+                // Keep the data without a breakdown.
+            }
+        });
     }
 
     _finish(request) {

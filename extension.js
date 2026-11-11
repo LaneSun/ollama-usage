@@ -11,6 +11,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {additionalAccounts, PRIMARY_ACCOUNT} from './accounts.js';
 import {UsageClient} from './client.js';
+import {lookupKey} from './keyring.js';
 import {clampFraction, emptyUsage} from './usage.js';
 
 const MARGIN = 2;
@@ -214,7 +215,7 @@ class OllamaIndicator extends PanelMenu.Button {
         this._chartSep = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this._chartSep);
 
-        this._chartTitleItem = new PopupMenu.PopupMenuItem(_('Calls per 1% usage'), {reactive: false, can_focus: false});
+        this._chartTitleItem = new PopupMenu.PopupMenuItem(_('Cost per model (7 days, USD)'), {reactive: false, can_focus: false});
         this._chartTitleItem.actor.add_style_class_name('ollama-cloud-chart-title');
         this.menu.addMenuItem(this._chartTitleItem);
 
@@ -299,10 +300,13 @@ class OllamaIndicator extends PanelMenu.Button {
             );
 
             const refillReset = this._formatReset(data.weeklyResetTs, 'dh');
+            const purchased = data.purchased > 0
+                ? _(' + %s%s purchased').format(data.creditsCurrency, data.purchased.toFixed(2))
+                : '';
             this._sessionItem.label.set_text(
-                refillReset
+                (refillReset
                     ? _('Remaining: %s%s (refills in %s)').format(data.creditsCurrency, remaining, refillReset)
-                    : _('Remaining: %s%s').format(data.creditsCurrency, remaining)
+                    : _('Remaining: %s%s').format(data.creditsCurrency, remaining)) + purchased
             );
         } else {
             const weeklyPct = Math.round(data.weekly * 100);
@@ -327,14 +331,14 @@ class OllamaIndicator extends PanelMenu.Button {
     }
 
     _statusText(data, error) {
-        if (error && data)
-            return _('Refresh failed — showing last successful data');
-        if (error === 'cookie')
-            return _('Set a valid session cookie in Preferences');
+        if (error === 'key')
+            return _('Store your ollama.com API key in the keyring');
         if (error === 'auth')
-            return _('Session expired — update the cookie in Preferences');
+            return _('ollama.com API key rejected — store a new one in the keyring');
         if (error === 'format')
-            return _('No usage data — check your cookie or Ollama plan');
+            return _('No usage data — check your ollama.com API key or plan');
+        if (error === 'network' && data)
+            return _('Refresh failed — showing last successful data');
         if (error)
             return _('Fetch failed — check your connection');
         return data ? _('Last fetch: OK') : _('Not fetched yet');
@@ -356,15 +360,13 @@ class OllamaIndicator extends PanelMenu.Button {
 
     _renderChart(data) {
         this._chartSection.removeAll();
-        if (!data || !data.models || data.models.length === 0 || data.weekly <= 0) {
+        if (!data || !data.models || data.models.length === 0) {
             this._addEmptyChartRow();
             return;
         }
 
         const rows = data.models.map(m => {
-            const actualPct = m.widthPct * data.weekly;
-            const value = actualPct > 0 ? m.requests / actualPct : 0;
-            return { name: m.name, value };
+            return { name: m.name, value: m.usd, requests: m.requests };
         }).filter(r => Number.isFinite(r.value) && r.value > 0);
         rows.sort((a, b) => b.value - a.value);
 
@@ -418,7 +420,9 @@ class OllamaIndicator extends PanelMenu.Button {
         });
         bar.add_child(fill);
 
-        const valueLabel = new St.Label({ text: this._formatCount(row.value) });
+        const valueLabel = new St.Label({
+            text: _('$%s · %s req').format(row.value.toFixed(2), this._formatCount(row.requests ?? 0)),
+        });
         valueLabel.add_style_class_name('ollama-cloud-chart-value');
         valueLabel.y_align = Clutter.ActorAlign.CENTER;
 
@@ -448,28 +452,33 @@ export default class OllamaCloudExtension extends Extension {
         this._settings = this.getSettings();
         this._accounts = new Map();
         this._settingsHandlers = [
-            'accounts', 'ollama-cookie', 'account-name',
+            'accounts', 'account-name', 'key-revision',
             'panel-position', 'panel-index',
         ].map(key => this._settings.connect(`changed::${key}`, () => this._syncAccounts()));
         this._syncAccounts();
     }
 
-    _syncAccounts() {
+    async _syncAccounts() {
         const definitions = [
             {
                 id: PRIMARY_ACCOUNT,
                 name: this._settings.get_string('account-name').trim() || _('Primary account'),
-                cookie: this._settings.get_string('ollama-cookie'),
             },
             ...additionalAccounts(this._settings.get_value('accounts').deep_unpack())
-                .map((account, index) => ({...account, name: account.name || _('Account %d').format(index + 2)})),
+                .map((account, index) => ({id: account.id, name: account.name || _('Account %d').format(index + 2)})),
         ];
+        const keys = await Promise.all(definitions.map(definition => lookupKey(definition.id)));
+        if (!this._accounts)
+            return;
+        definitions.forEach((definition, index) => {
+            definition.key = keys[index];
+        });
         // Preserve caches on layout edits; replace clients on credential edits.
         for (const account of this._accounts.values()) {
             account.indicator?.destroy();
             account.indicator = null;
             const next = definitions.find(definition => definition.id === account.id);
-            if (!next || next.cookie !== account.cookie) {
+            if (!next || next.key !== account.key) {
                 account.client.destroy();
                 this._accounts.delete(account.id);
             }
@@ -479,7 +488,7 @@ export default class OllamaCloudExtension extends Extension {
             const isNew = !account;
             if (isNew) {
                 account = {...definition, indicator: null};
-                account.client = new UsageClient(account.cookie, (data, error) => {
+                account.client = new UsageClient(account.key, (data, error) => {
                     account.indicator?.updateMenu(data, error);
                 });
                 this._accounts.set(account.id, account);

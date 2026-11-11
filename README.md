@@ -4,15 +4,13 @@ A GNOME Shell extension that displays [Ollama Cloud](https://ollama.com) usage i
 
 ## Usage display
 
-For **monthly credit plans**, the circle shows the fraction of included credits consumed. The popup shows used and remaining included credits, the plan name, and the next refill date when available. These plans have no session ring or clock hand.
+For **monthly credit plans**, the circle shows the fraction of included credits consumed. The popup shows used and remaining included credits, the refill countdown, and the separately purchased balance when there is one. These plans have no session ring or clock hand.
 
-![Credit plan popup](screenshot-credits.png)
+![Credit plan popup](screenshot.png)
+
+The model chart lists the seven-day cost per model in USD and the number of requests, both taken from Ollama's own usage JSON. Models are ranked by cost.
 
 For **legacy subscriptions**, the outer ring shows session usage, the inner circle shows weekly usage, and the clock hand shows progress through the five-hour session. The popup includes percentages and reset countdowns.
-
-![Legacy plan popup](screenshot.png)
-
-Both formats include a model chart ranked by calls per 1% of usage. The chart is based on the model breakdown reported by Ollama, not a prediction of future cost.
 
 ## Installation
 
@@ -39,32 +37,34 @@ gnome-extensions enable ollama-usage@lanesun.anlbrain.com
 
 The same `ollama-usage.zip` can be uploaded to GNOME Extensions. Packaging rebuilds translations and includes all runtime modules and the stylesheet; it excludes credentials, tests, repository metadata and compiled schemas. GNOME compiles the schema during installation.
 
-## Accounts and cookies
+## Accounts and API keys
 
-1. Sign in to [Ollama settings](https://ollama.com/settings) in your browser.
-2. Open developer tools, then **Application / Storage → Cookies → https://ollama.com**.
-3. Copy the value of `__Secure-session`.
-4. Open **Preferences** from the indicator menu, or run:
+1. Create an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys).
+2. Open **Preferences** from the indicator menu, or run:
 
    ```bash
    gnome-extensions prefs ollama-usage@lanesun.anlbrain.com
    ```
 
-5. Paste the value into the primary account's `__Secure-session` field and click its apply button. Fetching starts immediately.
+3. Paste the key into the primary account's **ollama.com API key** field and click its apply button. Fetching starts immediately. Applying an empty value removes the key.
 
-To display another account, click **Add Account**, give it a name, and apply its own session cookie. Use a separate browser profile or sign into that account to obtain the correct cookie. Each account has an independent meter, refresh action, cache and error status. Names appear beside the meters when multiple accounts are configured. Additional accounts can be removed with the trash button.
+Alternatively, store it from a terminal:
 
-Existing installations keep their original cookie as the primary account. Account names and cookies survive **Reset Appearance and Refresh Settings**. Cookie fields are hidden by default; their values are stored in your user GSettings, so treat your settings backups as sensitive.
+```bash
+nix shell nixpkgs#libsecret -c secret-tool store --label='ollama.com API key' account primary
+```
+
+The key lives in the system keyring (libsecret), never in GSettings. To display another account, click **Add Account**, give it a name, and apply its own key. Each account has an independent meter, refresh action, cache and error status. Additional accounts can be removed with the trash button.
 
 ## Appearance and refresh
 
 Preferences provide ring, circle and hand colors and dimensions, panel position and index, and a refresh interval from 5 to 3,600 seconds (default: 60). Appearance settings apply to all accounts.
 
-Each account requests `https://ollama.com/settings`. Transient network and HTTP failures retry three times with 1 / 2 / 4 second backoff. A stalled request is cancelled after 35 seconds. Polling does not interrupt an active request. Authentication redirects stop with a cookie error.
+Each account requests `https://ollama.com/api/balance` and `https://ollama.com/api/usage` (7 days, grouped by model). Ollama limits the API to 10 requests per minute per user, shared across devices. Transient network and HTTP failures retry three times with 1 / 2 / 4 second backoff. A stalled balance request is cancelled after 35 seconds. The per-model breakdown is best effort: if it fails, the rest of the reading still appears. Polling does not interrupt an active request. Rejected keys (401/403) stop with a key error.
 
-After a failed refresh, the last successful reading stays visible but is dimmed and explicitly marked stale. Changing a cookie clears the old reading. An empty or unrecognized page never appears as a successful 0% reading; genuine 0% usage is accepted.
+After a failed refresh, the last successful reading stays visible but is dimmed and explicitly marked stale. Changing a key clears the old reading. An unrecognized response never appears as a successful 0% reading.
 
-Usage is parsed from Ollama's settings HTML, so website changes may require parser updates. Credit amounts refer to the monthly included pool; separately purchased balances are not inferred from that meter.
+Readings come from Ollama's JSON API, so the extension no longer parses the website. Included credits and the separately purchased balance are reported apart, and a plan that only reports request counts still shows them.
 
 ## Development
 
@@ -76,13 +76,15 @@ make test
 python3 tests/package.test.py
 ```
 
-- `usage.js`: parsing and data validation for both pricing formats.
-- `accounts.js`: account records and cookie normalization.
+- `usage.js`: meter helpers (fraction clamping and the empty payload); its old HTML parser is kept only for the legacy tests.
+- `accounts.js`: account records.
+- `api.js`: parsers for the Ollama balance and usage JSON.
+- `keyring.js`: API key storage in the system keyring.
 - `client.js`: per-account HTTP requests, cache and retry lifecycle.
 - `extension.js`: panel drawing, menus and account orchestration.
 - `prefs.js`: account management and appearance settings.
 
-Tests use synthetic HTML and a local HTTP server, with no real credentials or requests to Ollama. GitHub Actions runs the same parser, account, request-lifecycle and archive checks.
+Tests use synthetic JSON and a local HTTP server, with no real credentials or requests to Ollama. GitHub Actions runs the same parser, account, request-lifecycle and archive checks.
 
 ## License
 
