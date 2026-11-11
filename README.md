@@ -4,15 +4,13 @@ A GNOME Shell extension that displays [Ollama Cloud](https://ollama.com) usage i
 
 ## Usage display
 
-For **monthly credit plans**, the circle shows the fraction of included credits consumed. The popup shows used and remaining included credits, the plan name, and the next refill date when available. These plans have no session ring or clock hand.
+For **monthly credit plans**, the circle shows the fraction of included credits consumed. The popup shows used and remaining included credits, the refill countdown, and the separately purchased balance when there is one. These plans have no session ring or clock hand.
 
-![Credit plan popup](screenshot-credits.png)
+![Credit plan popup](screenshot.png)
+
+The model chart lists the seven-day cost per model in USD and the number of requests, both taken from Ollama's own usage JSON. Up to ten models are shown, ranked by cost.
 
 For **legacy subscriptions**, the outer ring shows session usage, the inner circle shows weekly usage, and the clock hand shows progress through the five-hour session. The popup includes percentages and reset countdowns.
-
-![Legacy plan popup](screenshot.png)
-
-Both formats include a model chart ranked by calls per 1% of usage. The chart is based on the model breakdown reported by Ollama, not a prediction of future cost.
 
 ## Installation
 
@@ -66,7 +64,7 @@ Each account requests `https://ollama.com/api/balance` and `https://ollama.com/a
 
 After a failed refresh, the last successful reading stays visible but is dimmed and explicitly marked stale. Changing a key clears the old reading. An unrecognized response never appears as a successful 0% reading.
 
-Usage is parsed from Ollama's settings HTML, so website changes may require parser updates. Credit amounts refer to the monthly included pool; separately purchased balances are not inferred from that meter.
+Readings come from Ollama's JSON API, so the extension no longer parses the website. Included credits and the separately purchased balance are reported apart, and a plan that only reports request counts still shows them.
 
 ## Development
 
@@ -78,7 +76,7 @@ make test
 python3 tests/package.test.py
 ```
 
-- `usage.js`: parsing and data validation for both pricing formats.
+- `usage.js`: meter helpers (fraction clamping and the empty payload).
 - `accounts.js`: account records.
 - `api.js`: parsers for the Ollama balance and usage JSON.
 - `keyring.js`: API key storage in the system keyring.
@@ -86,7 +84,7 @@ python3 tests/package.test.py
 - `extension.js`: panel drawing, menus and account orchestration.
 - `prefs.js`: account management and appearance settings.
 
-Tests use synthetic HTML and a local HTTP server, with no real credentials or requests to Ollama. GitHub Actions runs the same parser, account, request-lifecycle and archive checks.
+Tests use synthetic JSON and a local HTTP server, with no real credentials or requests to Ollama. GitHub Actions runs the same parser, account, request-lifecycle and archive checks.
 
 ## License
 
