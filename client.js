@@ -11,7 +11,7 @@ const USAGE_URL = 'https://ollama.com/api/usage?range=7d&group_by=model';
 export class UsageClient {
     constructor(key, onUpdate, {url = BALANCE_URL, watchdogSeconds = 35, reportUrl = url === BALANCE_URL ? USAGE_URL : null} = {}) {
         this._reportUrl = reportUrl;
-        this._key = key.trim();
+        this._key = (key ?? '').trim();
         this._onUpdate = onUpdate;
         this._url = url;
         this._watchdogSeconds = watchdogSeconds;

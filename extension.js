@@ -331,14 +331,14 @@ class OllamaIndicator extends PanelMenu.Button {
     }
 
     _statusText(data, error) {
-        if (error && data)
-            return _('Refresh failed — showing last successful data');
         if (error === 'key')
             return _('Store your ollama.com API key in the keyring');
         if (error === 'auth')
             return _('ollama.com API key rejected — store a new one in the keyring');
         if (error === 'format')
             return _('No usage data — check your ollama.com API key or plan');
+        if (error === 'network' && data)
+            return _('Refresh failed — showing last successful data');
         if (error)
             return _('Fetch failed — check your connection');
         return data ? _('Last fetch: OK') : _('Not fetched yet');

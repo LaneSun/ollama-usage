@@ -49,3 +49,14 @@ test('parseUsage handles legacy plans without groups', () => {
     assert.deepEqual(d.models, []);
     assert.equal(parseUsage({}), null);
 });
+
+test('parseBalance rejects a credit payload without numbers', () => {
+    assert.equal(parseBalance({included: {balance_usd: null, allowance_usd: 50}}), null);
+    assert.equal(parseBalance({included: {}}), null);
+});
+
+test('parseBalance prefers credit fields over empty legacy objects', () => {
+    const d = parseBalance({included: {session: {}, allowance_usd: 60, balance_usd: 20}});
+    assert.equal(d.creditsTotal, 60);
+    assert.equal(d.hasSession, false);
+});

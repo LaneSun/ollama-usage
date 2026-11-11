@@ -10,7 +10,8 @@ export function parseBalance(json) {
         found: true, creditsCurrency: '$', weekly: 0, fiveHour: 0, hasSession: false,
         purchased: json.purchased?.balance_usd ?? 0, models: [],
     };
-    if (included.session || included.weekly) {
+    const hasCredits = Number.isFinite(included.allowance_usd) && Number.isFinite(included.balance_usd);
+    if (!hasCredits && (included.session || included.weekly)) {
         data.hasSession = !!included.session;
         data.fiveHour = 1 - (included.session?.remaining_percent ?? 100) / 100;
         data.sessionResetTs = seconds(included.session?.resets_at);
@@ -18,6 +19,8 @@ export function parseBalance(json) {
         data.weeklyResetTs = seconds(included.weekly?.resets_at);
         return data;
     }
+    if (!hasCredits)
+        return null;
     data.creditsTotal = included.allowance_usd;
     data.creditsRemaining = included.balance_usd;
     data.creditsUsed = Math.max(0, round(included.allowance_usd - included.balance_usd));
