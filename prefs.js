@@ -4,7 +4,8 @@ import Gdk from 'gi://Gdk';
 import GLib from 'gi://GLib';
 
 import { ExtensionPreferences, gettext as _ } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import {additionalAccounts, normalizeCookie} from './accounts.js';
+import {additionalAccounts} from './accounts.js';
+import {storeKey} from './keyring.js';
 
 function rgbaToHex(rgba) {
     const r = Math.round(rgba.red * 255).toString(16).padStart(2, '0');
@@ -42,15 +43,13 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
 
         const cloudGroup = new Adw.PreferencesGroup({
             title: _('Primary account'),
-            description: _('Each account has its own panel meter. Cookies are stored in your user settings.'),
+            description: _('Each account has its own panel meter. API keys are stored in the system keyring.'),
         });
         const nameRow = new Adw.EntryRow({title: _('Account name'), show_apply_button: true});
         nameRow.text = settings.get_string('account-name');
         nameRow.connect('apply', () => settings.set_string('account-name', nameRow.text.trim()));
         cloudGroup.add(nameRow);
-        cloudGroup.add(this._createCookieRow(settings.get_string('ollama-cookie'), cookie => {
-            settings.set_string('ollama-cookie', cookie);
-        }));
+        cloudGroup.add(this._createKeyRow('primary'));
         page.add(cloudGroup);
 
         this._accountsGroup = new Adw.PreferencesGroup({title: _('Additional accounts')});
@@ -134,21 +133,16 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
         }
     }
 
-    _createCookieRow(value, onApply) {
-        const row = new Adw.PasswordEntryRow({
-            title: _('__Secure-session'),
-            show_apply_button: true,
-            text: value,
-        });
-
+    _createKeyRow(account) {
+        const row = new Adw.PasswordEntryRow({title: _('ollama.com API key'), show_apply_button: true});
         row.connect('apply', () => {
-            const cookie = normalizeCookie(row.text);
-            if (row.text.trim() && !cookie) {
+            try {
+                storeKey(account, row.text.trim());
+                this._settings.set_int('key-revision', this._settings.get_int('key-revision') + 1);
+                row.remove_css_class('error');
+            } catch {
                 row.add_css_class('error');
-                return;
             }
-            row.remove_css_class('error');
-            onApply(cookie);
         });
         return row;
     }
@@ -187,7 +181,7 @@ export default class OllamaCloudPreferences extends ExtensionPreferences {
                 this._updateAccount(id, 1, nameRow.text.trim());
             });
             row.add_row(nameRow);
-            row.add_row(this._createCookieRow(cookie, value => this._updateAccount(id, 2, value)));
+            row.add_row(this._createKeyRow(id));
             const remove = new Gtk.Button({
                 icon_name: 'user-trash-symbolic',
                 tooltip_text: _('Remove Account'),

@@ -39,30 +39,32 @@ gnome-extensions enable ollama-usage@lanesun.anlbrain.com
 
 生成的 `ollama-usage.zip` 也可上传至 GNOME Extensions。打包会重新编译翻译，包含全部运行模块和样式，排除凭据、测试、版本控制目录及编译后的 schema；GNOME 会在安装时编译 schema。
 
-## 账号和 Cookie
+## 账号和 API 密钥
 
-1. 在浏览器中登录 [Ollama 设置页面](https://ollama.com/settings)。
-2. 打开开发者工具，进入 **Application / Storage → Cookies → https://ollama.com**。
-3. 复制 `__Secure-session` 的值。
-4. 从仪表菜单打开**设置**，或运行：
+1. 在 [ollama.com/settings/keys](https://ollama.com/settings/keys) 创建 API 密钥。
+2. 在指示器菜单中打开**偏好设置**，或运行：
 
    ```bash
    gnome-extensions prefs ollama-usage@lanesun.anlbrain.com
    ```
 
-5. 将值粘贴到主账号的 `__Secure-session` 字段并点击应用按钮，扩展会立即获取数据。
+3. 将密钥粘贴到主账号的 **ollama.com API key** 输入框并点击应用，随即开始获取。应用空值会删除密钥。
 
-需要同时显示其他账号时，点击**添加账号**，填写名称并应用该账号自己的 Cookie。可通过独立的浏览器配置或切换登录账号获取相应 Cookie。每个账号都有独立的仪表、刷新操作、缓存和错误状态；配置多个账号后，顶栏仪表旁会显示名称。其他账号可通过垃圾桶按钮移除。
+也可在终端中保存：
 
-升级时，原有 Cookie 继续用作主账号。**重置外观和刷新设置**不会删除账号名称及 Cookie。Cookie 输入框默认隐藏内容，其值保存在用户 GSettings 中，请妥善保管包含这些设置的备份。
+```bash
+nix shell nixpkgs#libsecret -c secret-tool store --label='ollama.com API key' account primary
+```
+
+密钥保存在系统密钥环（libsecret）中，不会写入 GSettings。需要显示其他账号时，点击**添加账号**，填写名称并应用该账号自己的密钥。每个账号都有独立的仪表、刷新操作、缓存和错误状态。其他账号可通过垃圾桶按钮移除。
 
 ## 外观和刷新
 
 设置支持调整外环、内圆、指针的颜色及尺寸，修改顶栏位置和序号，并将刷新间隔设置为 5–3600 秒（默认 60 秒）。外观设置对所有账号生效。
 
-每个账号单独请求 `https://ollama.com/dashboard`（另请求用量报告以获取按模型的明细）。网络或 HTTP 临时失败会以 1 / 2 / 4 秒间隔重试三次；卡住的请求会在 35 秒后取消。定时刷新不会打断正在进行的请求；身份验证重定向会停止请求并显示 Cookie 错误。
+每个账号单独请求 `https://ollama.com/api/balance` 和 `https://ollama.com/api/usage`（7 天，按模型分组）。Ollama 限制每位用户每分钟 10 次 API 请求，多设备共享。网络或 HTTP 临时失败会以 1 / 2 / 4 秒间隔重试三次；卡住的请求会在 35 秒后取消。定时刷新不会打断正在进行的请求；密钥被拒绝（401/403）时会停止请求并显示密钥错误。
 
-刷新失败后，上次成功的数据仍会保留，但仪表会变暗并明确标注为旧数据。修改 Cookie 会清除旧读数。空白或无法识别的页面不会被当成成功的 0% 用量；真实的 0% 用量可正常识别。
+刷新失败后，上次成功的数据仍会保留，但仪表会变暗并明确标注为旧数据。修改密钥会清除旧读数。无法识别的响应不会被当成成功的 0% 用量。
 
 数据来自 Ollama 设置页面的 HTML，网站结构变化可能需要更新解析器。额度数值对应当月包含的额度池，不会根据该仪表推算额外购买的余额。
 
@@ -77,7 +79,9 @@ python3 tests/package.test.py
 ```
 
 - `usage.js`：两种计费格式的解析及数据校验。
-- `accounts.js`：账号记录和 Cookie 规范化。
+- `accounts.js`：账号记录。
+- `api.js`：Ollama 余额和用量 JSON 解析。
+- `keyring.js`：在系统密钥环中保存 API 密钥。
 - `client.js`：各账号的 HTTP 请求、缓存及重试生命周期。
 - `extension.js`：顶栏绘制、菜单及账号协调。
 - `prefs.js`：账号管理和外观设置。

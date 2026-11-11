@@ -37,7 +37,7 @@ msgstr "位置"
 msgid "Data"
 msgstr "数据"
 
-# prefs.js — cookie
+# prefs.js — API key
 msgid "__Secure-session"
 msgstr "__Secure-session"
 
@@ -105,8 +105,8 @@ msgstr "立即刷新"
 msgid "Not fetched yet"
 msgstr "尚未获取"
 
-msgid "Fetch failed — check cookie"
-msgstr "获取失败——请检查 Cookie"
+msgid "Fetch failed — check API key"
+msgstr "获取失败——请检查 API 密钥"
 
 msgid "Last fetch: OK"
 msgstr "上次获取：成功"
@@ -148,8 +148,8 @@ msgstr "无模型用量数据"
 msgid "Primary account"
 msgstr "主账号"
 
-msgid "Each account has its own panel meter. Cookies are stored in your user settings."
-msgstr "每个账号都有独立的顶栏仪表。Cookie 保存在你的用户设置中。"
+msgid "Each account has its own panel meter. API keys are stored in the system keyring."
+msgstr "每个账号都有独立的顶栏仪表。API 密钥保存在系统钥匙串中。"
 
 msgid "Account name"
 msgstr "账号名称"
@@ -178,14 +178,14 @@ msgstr "设置"
 msgid "Refresh failed — showing last successful data"
 msgstr "刷新失败——显示上次成功获取的数据"
 
-msgid "Set a valid session cookie in Preferences"
-msgstr "请在设置中填写有效的会话 Cookie"
+msgid "Store your ollama.com API key in the keyring"
+msgstr "请在系统钥匙串中保存你的 ollama.com API 密钥"
 
-msgid "Session expired — update the cookie in Preferences"
-msgstr "会话已过期——请在设置中更新 Cookie"
+msgid "ollama.com API key rejected — store a new one in the keyring"
+msgstr "ollama.com API 密钥被拒绝——请在钥匙串中保存新的密钥"
 
-msgid "No usage data — check your cookie or Ollama plan"
-msgstr "未找到用量数据——请检查 Cookie 或 Ollama 套餐"
+msgid "No usage data — check your ollama.com API key or plan"
+msgstr "未找到用量数据——请检查 ollama.com API 密钥或套餐"
 
 msgid "Fetch failed — check your connection"
 msgstr "获取失败——请检查网络连接"
@@ -204,3 +204,15 @@ msgstr "剩余：%s%s"
 
 msgid "Monitor Ollama Cloud usage for multiple accounts, including monthly credits and legacy subscriptions."
 msgstr "监测多个 Ollama Cloud 账号的使用量，支持月度额度和旧版订阅。"
+
+msgid "ollama.com API key"
+msgstr "ollama.com API 密钥"
+
+msgid "Cost per model (7 days, USD)"
+msgstr "各模型费用（7 天，美元）"
+
+msgid " + %s%s purchased"
+msgstr " + %s%s 已购"
+
+msgid "$%s · %s req"
+msgstr "$%s · %s 次"

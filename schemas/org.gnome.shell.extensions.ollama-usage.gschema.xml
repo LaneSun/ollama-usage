@@ -81,9 +81,9 @@
     </key>
 
     <!-- Ollama Cloud credentials / fetch -->
-    <key name="ollama-cookie" type="s">
-      <default>""</default>
-      <summary>Ollama Cookie</summary>
+    <key name="key-revision" type="i">
+      <default>0</default>
+      <summary>Bumped when an API key is stored in the keyring</summary>
     </key>
 
     <key name="account-name" type="s">
@@ -93,7 +93,7 @@
 
     <key name="accounts" type="a(sss)">
       <default>[]</default>
-      <summary>Additional accounts (stable ID, display name, session cookie)</summary>
+      <summary>Additional accounts (stable ID, display name, unused)</summary>
     </key>
 
   </schema>
