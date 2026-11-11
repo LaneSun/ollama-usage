@@ -3,13 +3,15 @@ import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
 import {normalizeCookie} from './accounts.js';
-import {parseUsage} from './usage.js';
+import {parseModels, parseUsage} from './usage.js';
 
-const SETTINGS_URL = 'https://ollama.com/settings';
+const SETTINGS_URL = 'https://ollama.com/dashboard';
+const REPORT_URL = 'https://ollama.com/settings/usage/report?scope=self';
 
 // One instance owns one account's connection, cache, requests and timers.
 export class UsageClient {
-    constructor(cookie, onUpdate, {url = SETTINGS_URL, watchdogSeconds = 35} = {}) {
+    constructor(cookie, onUpdate, {url = SETTINGS_URL, watchdogSeconds = 35, reportUrl = url === SETTINGS_URL ? REPORT_URL : null} = {}) {
+        this._reportUrl = reportUrl;
         this._cookie = normalizeCookie(cookie);
         this._onUpdate = onUpdate;
         this._url = url;
@@ -79,8 +81,11 @@ export class UsageClient {
                     this._failed('network', retries);
                 } else {
                     const data = parseUsage(new TextDecoder().decode(bytes.get_data()));
-                    if (data.found)
+                    if (data.found) {
+                        data.models = this.data?.models ?? [];
                         this._publish(data, null);
+                        this._fetchModels(data);
+                    }
                     else
                         this._failed('format', 0);
                 }
@@ -89,6 +94,28 @@ export class UsageClient {
             if (this._finish(request))
                 this._failed('network', retries);
         }
+    }
+
+    // Best effort: the per-model breakdown is optional, so failures are ignored.
+    _fetchModels(data) {
+        if (!this._reportUrl || this._destroyed)
+            return;
+        const message = Soup.Message.new('GET', this._reportUrl);
+        message.flags |= Soup.MessageFlags.NO_REDIRECT;
+        message.request_headers.append('Cookie', `__Secure-session=${this._cookie}`);
+        message.request_headers.append('User-Agent', 'Mozilla/5.0');
+        message.request_headers.append('HX-Request', 'true');
+        this._session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, null, (session, result) => {
+            try {
+                const bytes = session.send_and_read_finish(result);
+                if (this._destroyed || message.get_status() !== 200 || this.data !== data)
+                    return;
+                data.models = parseModels(new TextDecoder().decode(bytes.get_data()));
+                this._onUpdate(this.data, this.error);
+            } catch {
+                // Keep the data without a breakdown.
+            }
+        });
     }
 
     _finish(request) {

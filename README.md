@@ -60,7 +60,7 @@ Existing installations keep their original cookie as the primary account. Accoun
 
 Preferences provide ring, circle and hand colors and dimensions, panel position and index, and a refresh interval from 5 to 3,600 seconds (default: 60). Appearance settings apply to all accounts.
 
-Each account requests `https://ollama.com/settings`. Transient network and HTTP failures retry three times with 1 / 2 / 4 second backoff. A stalled request is cancelled after 35 seconds. Polling does not interrupt an active request. Authentication redirects stop with a cookie error.
+Each account requests `https://ollama.com/dashboard` (plus the usage report for the per-model breakdown). Transient network and HTTP failures retry three times with 1 / 2 / 4 second backoff. A stalled request is cancelled after 35 seconds. Polling does not interrupt an active request. Authentication redirects stop with a cookie error.
 
 After a failed refresh, the last successful reading stays visible but is dimmed and explicitly marked stale. Changing a cookie clears the old reading. An empty or unrecognized page never appears as a successful 0% reading; genuine 0% usage is accepted.
 

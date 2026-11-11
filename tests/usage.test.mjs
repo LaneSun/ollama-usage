@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {clampFraction, parseUsage} from '../usage.js';
+import {clampFraction, parseModels, parseUsage} from '../usage.js';
 import {additionalAccounts, normalizeCookie} from '../accounts.js';
 
 const fixture = name => readFileSync(new URL(`fixtures/${name}.html`, import.meta.url), 'utf8');
@@ -100,4 +100,21 @@ test('additional account IDs are unique and never override the primary account',
         ['a', ' Work ', 'cookie-a'], ['b', 'Personal', 'cookie-b'],
         ['a', 'Duplicate', 'wrong'], ['primary', 'Override', 'wrong'], ['../invalid', '', 'wrong'],
     ]), [{id: 'a', name: 'Work', cookie: 'cookie-a'}, {id: 'b', name: 'Personal', cookie: 'cookie-b'}]);
+});
+
+test('dashboard derives spend and cap from the remaining balance', () => {
+    const data = parseUsage(fixture('dashboard'));
+    assert.equal(data.found, true);
+    assert.equal(data.creditsTotal, 60);
+    assert.equal(data.creditsUsed, 34.76);
+    assert.equal(data.planType, 'Pro');
+    assert.equal(data.weeklyResetTs, Date.parse('November 21, 2026') / 1000);
+    assert.ok(Math.abs(data.weekly - 34.76 / 60) < 1e-9);
+});
+
+test('report table gives requests and cost share per model', () => {
+    assert.deepEqual(parseModels(fixture('report')), [
+        {name: 'model-a', requests: 1000, widthPct: 75},
+        {name: 'model-b', requests: 50, widthPct: 25},
+    ]);
 });
